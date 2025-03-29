@@ -5,15 +5,18 @@ import json
 import time
 from dotenv import load_dotenv
 import os
+from google import genai
+from google.genai import types
 
 #from urllib.parse import urlencode
 
 class RouteOptimizer:
-    def __init__(self, api_key, class_url, class_key, search_id):
+    def __init__(self, api_key, gen_api, class_url, class_key, search_id):
         self.api_key = api_key
         self.class_url = class_url
         self.class_key = class_key
         self.search_id = search_id
+        self.genai_client = genai.Client(api_key=gen_api)
 
     def extract_lat_lng(self, input_address, data_type='json'):
         """
@@ -386,23 +389,56 @@ class RouteOptimizer:
             return None, None
 
 
-    def name_generator(self, original_name):
+    def name_generator(self, cluster_places):
         """
-        Generates a unique and catchy alternative name for a given place using the FLAN-T5 model.
+        Generates a unique, catchy, and creative name for a cluster of places.
         """
-        payload = {
-            "inputs": f"Classify the location - {original_name} into one of the following broad categories based on its primary function: Historic Site, Art Haven, Scenic Monument, Wild Reserve, Tranquil Park, Scenic Trail, Amusement Zone, Gaming Lounge, Food Stop, Gourmet Bistro, Street Feast, Tasting Corner, Fashion District, Market Square, Boutique Row, Spiritual Retreat, Worship Hall, Peace Sanctuary."
-        }
+        # Combine place names into a single string for the prompt
+        place_names = ", ".join([place["Name"] for place in cluster_places if place.get("Name")])
+        
+        # Refined prompt to generate a catchy name directly
+        prompt = f"Generate a unique, catchy, and creative name for a cluster of places: {place_names}. The name should be short, memorable, and reflect the essence of this group."
 
         try:
-            response = requests.post(self.class_url, headers = {"Authorization": f"Bearer {self.class_key}"}, json = payload)
-            response.raise_for_status()  # Raise an error for failed requests
-            result = response.json()
-
-            return result[0].get("generated_text")
-
+            # Use the Gemini model for content generation
+            response = self.genai_client.models.generate_content(
+                model='gemini-2.0-flash-001',  # Adjust the model version if necessary
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="Generate just one unique and catchy name for the given cluster of places without any description.",
+                    max_output_tokens=50,  # Allow a slightly longer output to get full descriptions
+                    temperature=0.7,       # Control randomness
+                ),
+            )
+            
+            # Return the generated name
+            return response.text.strip() if response.text else "Unnamed Cluster"
         except:
-            return "Something New"
+            return "Unnamed Cluster" 
+    
+    def description_generator(self, cluster_places):
+        """
+        Generates a unique, catchy, and creative description for a cluster of places.
+        """
+        place_names = ", ".join([place["Name"] for place in cluster_places if place.get("Name")])
+        prompt = f"Generate a creative description for a cluster of places: {place_names}. The description should have 5 sentences and should be memorable, and reflect the essence of this group. Do not include options, lists, or additional formatting."
+
+        try:
+            response = self.genai_client.models.generate_content(
+                model='gemini-2.0-flash-001',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="Generate a catchy and creative description for the given cluster of places without any additional formatting or options.",
+                    max_output_tokens=100,
+                    temperature=0.7,
+                ),
+            )
+            generated_text = response.text.strip() if response.text else "No description available."
+            clean_text = generated_text.split("\n")[0]
+            return clean_text
+        except Exception as e:
+            return "No description available."
+        
 
 
     def get_place_image(self, query):
@@ -537,7 +573,6 @@ class RouteOptimizer:
 
                 route_entry = {
                     "Name": segment["name"],
-                    "Hunt Name": self.name_generator(segment["name"]),
                     "Origin": segment["origin"],
                     "Destination": segment["destination"],
                     "Estimated Travel Distance (km)": round(segment["distance"], 1),
@@ -547,9 +582,11 @@ class RouteOptimizer:
                     "Image URL": image_url
                 }
                 routes.append(route_entry)
-            
+
             optimized_routes.append({
                 "Cluster ID": cluster_id,
+                "Cluster Name": self.name_generator(group),
+                "Cluster Description": self.description_generator(group),
                 "Estimated Travel Distance (km)": round(travel_distance, 1),
                 "Estimated Travel Time (min)": round(travel_time, 1),
                 "Total Estimated Time (min)": round(total_time, 1),
@@ -588,12 +625,13 @@ class RouteOptimizer:
 # Apis & Keys
 load_dotenv()
 api = os.getenv("API_KEY")
+gen_key = os.getenv("GEN_API")
 class_url = os.getenv("CLASS_URL")
 class_key = os.getenv("CLASS_KEY")
 search_id = os.getenv("SEARCH_ID")
 
 # Input
-"""address = "164 E 87th St, New York, NY"
+address = "164 E 87th St, New York, NY"
 keyword = ["attraction", "entertainment"]
 rad = 30000
 disabled = True
@@ -604,7 +642,7 @@ time_per_location = 0
 
 # Initialize RouteOptimizer
 
-optimizer = RouteOptimizer(api_key=api, class_url=class_url, class_key=class_key, search_id=search_id)
+optimizer = RouteOptimizer(api_key=api, gen_api = gen_key, class_url=class_url, class_key=class_key, search_id=search_id)
 lati, long = optimizer.starting_point(use_current_location, address)
 places_response = optimizer.nearby_places_multi_keyword(base_keywords = keyword, maxresult = 20, lat = lati, lon = long, radius = rad)
 final_places = optimizer.sorted_place_details(places_response, accessible = disabled)
@@ -617,5 +655,4 @@ optimized_routes = optimizer.optimize_routes(
     visit_duration_per_location = time_per_location, 
     user_modes = mode
 )
-print(optimized_routes)"
-"""
+print(optimized_routes)
