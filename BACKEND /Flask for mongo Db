@@ -5,7 +5,7 @@ import uuid
 app = Flask(__name__)
 
 # Connect to MongoDB Atlas
-client = MongoClient("mongodb+srv://scprac:scprac123@hackpsu.aqzjk1j.mongodb.net/?retryWrites=true&w=majority&appName=HACKPSU")
+client = MongoClient("")
 db = client["travel_app"]
 
 # Use specified collection names
