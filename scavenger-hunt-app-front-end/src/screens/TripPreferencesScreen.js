@@ -6,7 +6,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import {
   TextInput,
@@ -18,6 +17,7 @@ import {
 } from 'react-native-paper';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native'; // ✅ Import navigation
 
 const TRANSPORT_MODES = [
   { mode: 'walking', icon: 'directions-walk' },
@@ -36,6 +36,8 @@ const THEME_OPTIONS = [
 
 const TripPreferencesScreen = () => {
   const { colors } = useTheme();
+  const navigation = useNavigation(); // ✅ Use navigation
+
   const [location, setLocation] = useState('');
   const [isAccessible, setIsAccessible] = useState(false);
   const [radius, setRadius] = useState(10);
@@ -54,6 +56,11 @@ const TripPreferencesScreen = () => {
         return prevModes;
       }
     });
+  };
+
+  const handleSavePreferences = () => {
+    navigation.navigate('Selection');
+
   };
 
   return (
@@ -99,9 +106,7 @@ const TripPreferencesScreen = () => {
 
         <Text style={[styles.label, { color: colors.text }]}>Search Radius</Text>
         <View style={styles.radiusRow}>
-          <Text style={[styles.radiusValue, { color: colors.text }]}>
-            {radius} miles
-          </Text>
+          <Text style={[styles.radiusValue, { color: colors.text }]}>{radius} miles</Text>
           <Slider
             style={styles.slider}
             minimumValue={1}
@@ -136,7 +141,9 @@ const TripPreferencesScreen = () => {
           </View>
         </View>
 
-        <Text style={[styles.durationSummary, { color: colors.text }]}>Total Duration: {hours} hr{hours !== 1 ? 's' : ''} {minutes} min</Text>
+        <Text style={[styles.durationSummary, { color: colors.text }]}>
+          Total Duration: {hours} hr{hours !== 1 ? 's' : ''} {minutes} min
+        </Text>
 
         <Divider style={styles.divider} />
 
@@ -183,7 +190,9 @@ const TripPreferencesScreen = () => {
                   size={32}
                   color={isSelected ? colors.primary : colors.text}
                 />
-                <Text style={[styles.transportLabel, { color: colors.text }]}> {mode.charAt(0).toUpperCase() + mode.slice(1)}</Text>
+                <Text style={[styles.transportLabel, { color: colors.text }]}>
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -191,7 +200,7 @@ const TripPreferencesScreen = () => {
 
         <Button
           mode="contained"
-          onPress={() => Alert.alert('Preferences saved!')}
+          onPress={handleSavePreferences} 
           style={styles.submitButton}
           labelStyle={{ fontWeight: '600' }}
           buttonColor={colors.primary}
@@ -223,10 +232,30 @@ const styles = StyleSheet.create({
   stepperButton: { marginHorizontal: 0 },
   stepperValue: { fontSize: 18, marginHorizontal: 8, width: 40, textAlign: 'center' },
   themeContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  themeButton: { width: '30%', aspectRatio: 3.5, borderRadius: 50, marginBottom: 10, justifyContent: 'center', alignItems: 'center' },
+  themeButton: {
+    width: '30%',
+    aspectRatio: 3.5,
+    borderRadius: 50,
+    marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   themeName: { color: '#fff', fontWeight: '600' },
-  transportModes: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, justifyContent: 'space-around' },
-  transportButton: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
+  transportModes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    justifyContent: 'space-around',
+  },
+  transportButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   transportLabel: { fontSize: 12, marginTop: 4, textTransform: 'capitalize' },
   submitButton: { marginTop: 20, borderRadius: 20, paddingVertical: 6 },
   durationSummary: { fontSize: 14, fontWeight: '500', marginTop: 8 },

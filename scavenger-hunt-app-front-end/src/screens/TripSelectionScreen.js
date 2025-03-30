@@ -6,24 +6,39 @@ import { useNavigation } from '@react-navigation/native';
 const trips = [
   {
     id: 1,
-    title: 'Sunset Beach Walk',
-    duration: '30 min',
-    location: 'Santa Monica',
+    title: 'Brooklyn Bridge, Manhattan & Empire State Building',
+    duration: '3.5 hours',
+    location: 'Brooklyn Bridge, Manhattan, Empire State Building ',
     image: require('../assets/image2.webp'),
+    coordinates: [
+      { name: 'Brooklyn Bridge', latitude: 40.7061, longitude: -73.9969 },
+      { name: 'Manhattan', latitude: 40.7831, longitude: -73.9712 },
+      { name: 'Empire State Building', latitude: 40.7484, longitude: -73.9857 },
+    ],
   },
   {
     id: 2,
-    title: 'Historic City Tour',
-    duration: '45 min',
-    location: 'Downtown',
+    title: 'Central Park, Times Square & Rockefeller Center',
+    duration: '3 hours',
+    location: 'Central Park, Times Square, Rockefeller Center ',
     image: require('../assets/image1.webp'),
+    coordinates: [
+      { name: 'Central Park', latitude: 40.7851, longitude: -73.9683 },
+      { name: 'Times Square', latitude: 40.7580, longitude: -73.9855 },
+      { name: 'Rockefeller Center', latitude: 40.7587, longitude: -73.9787 },
+    ],
   },
   {
     id: 3,
-    title: 'Nature Escape',
-    duration: '60 min',
-    location: 'Griffith Park',
+    title: 'Battery Park, Statue of Liberty & Ellis Island',
+    duration: '4 hours',
+    location: 'Battery Park, Statue of Liberty, Ellis Island ',
     image: require('../assets/image.png'),
+    coordinates: [
+      { name: 'Battery Park', latitude: 40.7033, longitude: -74.0170 },
+      { name: 'Statue of Liberty', latitude: 40.6892, longitude: -74.0445 },
+      { name: 'Ellis Island', latitude: 40.6995, longitude: -74.0396 },
+    ],
   },
 ];
 
@@ -37,25 +52,22 @@ const TripSelectionScreen = () => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.header, { color: colors.text }]}>Select a Trip</Text>
+      <Text style={[styles.header, { color: colors.text }]}>Select a New York Route</Text>
 
       {trips.map((trip) => (
         <View key={trip.id} style={[styles.tripContainer, { backgroundColor: colors.surface }]}>
-          <Image
-            source={trip.image}
-            style={styles.image}
-          />
+          <Image source={trip.image} style={styles.image} />
           <Text style={[styles.title, { color: colors.text }]}>{trip.title}</Text>
           <Text style={{ color: colors.text }}>Duration: {trip.duration}</Text>
-          <Text style={{ color: colors.text }}>Location: {trip.location}</Text>
-          
+          <Text style={{ color: colors.text }}>Locations: {trip.location}</Text>
+
           <Button
             buttonColor="#00FF00"
             textColor="#000"
             onPress={() => openResultScreen(trip)}
-            style={[styles.button, { borderRadius: 15 }]} // Less rounded corners
+            style={[styles.button, { borderRadius: 15 }]}
           >
-            Start
+            Preview
           </Button>
         </View>
       ))}
@@ -82,7 +94,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 200, // Adjust as necessary
+    height: 200,
   },
   title: {
     fontSize: 18,
@@ -91,8 +103,7 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 10,
-    alignSelf: 'flex-end', // Align button to the right
-    width: 100, // Make the button short
-    
+    alignSelf: 'flex-end',
+    width: 100,
   },
 });
