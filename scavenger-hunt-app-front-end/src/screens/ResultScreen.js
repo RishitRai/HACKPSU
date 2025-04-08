@@ -1,94 +1,109 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import { useRoute } from '@react-navigation/native';
-import { useTheme, Button, Snackbar } from 'react-native-paper';
+import React from 'react';
+import { View, Text, StyleSheet, Image, SafeAreaView, Dimensions, FlatList, Linking, TouchableOpacity, ScrollView } from 'react-native';
+import { useTheme } from '@react-navigation/native';
+import MapView, { Marker } from 'react-native-maps';
 
-const ResultScreen = () => {
-  const route = useRoute();
-  const { trip } = route.params || {};
+
+const ResultScreen = ({ route }) => {
   const { colors } = useTheme();
+  const { trip } = route.params;
 
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const coordinates = trip.destinations.map((destination) => ({
+    latitude: destination.lat,
+    longitude: destination.lng,
+    name: destination.name,
+  }));
 
-  if (!trip || !trip.coordinates || trip.coordinates.length < 1) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: 56 }]}>
-        <Text style={[styles.header, { color: colors.text }]}>Trip data not available.</Text>
-      </View>
-    );
-  }
-
-  const { title, duration, coordinates, image } = trip;
-
-  const handleCheckIn = () => {
-    setSnackbarVisible(true);
-    console.log(false);
+  const initialRegion = {
+    latitude: coordinates[0]?.latitude || 37.7749,
+    longitude: coordinates[0]?.longitude || -122.4194,
+    latitudeDelta: 0.009, // Zoom level
+    longitudeDelta: 0.009,
   };
 
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: 56 }]}>
-      <Image source={image} style={styles.image} />
+    <SafeAreaView  style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Image source={trip.image} style={styles.image} />
+        <Text style={[styles.title, { color: colors.text }]}>{trip.name}</Text>
+        <Text style={{ color: colors.text }}>Description: {trip.description}</Text>
+        <Text style={[styles.info, { color: colors.text }]}>Duration: {trip.estimatedTime} min</Text>
+        <Text style={[styles.info, { color: colors.text }]}>Estimated Distance: {trip.estimatedDistance} km</Text>
+        <Text style={{ color: colors.text }}>Ratings: {trip.ratings}</Text>
+        <Text style={{ color: colors.text }}>Popularity: {trip.popularity}</Text>
 
-      <Text style={[styles.header, { color: colors.text }]}>{title}</Text>
-      <Text style={[styles.detailText, { color: colors.text }]}>Duration: {duration}</Text>
-      <Text style={[styles.detailText, { color: colors.text }]}>City: New York</Text>
+        
+        <Text style={[styles.header, { color: colors.text }]}>Journey for {trip.name}</Text>
 
-      <View style={styles.locationList}>
-        {coordinates.map((loc, index) => (
-          <Text key={index} style={[styles.locationItem, { color: colors.text }]}>
-            • {loc.name}
-          </Text>
+        {trip.destinations.map((destination, index) => (
+          <View key={index} style={styles.stepContainer}>
+
+
+            <View style={styles.lining}>
+              <View style={styles.circle}>
+                <Text style={styles.circleText}>{index + 1}</Text>
+              </View>
+
+              {index < trip.destinations.length - 1 && (
+                <View style={styles.lineContainer}>
+                  <View style={styles.line} />
+                </View>
+              )}
+            </View>
+            
+
+
+            <View style={styles.stepDetails}>
+              <Text style={[styles.location, { color: colors.text }]}>{destination.name}</Text>
+              <Text style={[styles.transport, { color: colors.text }]}>
+                Mode: {destination.modeOfTransport}
+              </Text>
+
+              {/* {destination.mapLink && (
+                <TouchableOpacity
+                  style={styles.linkContainer}
+                  onPress={() => {
+                    if (destination.mapLink.startsWith('http')) {
+                      Linking.openURL(destination.mapLink);
+                    } else {
+                      alert('Not a valid URL');
+                    }
+                  }}
+                >
+                  <Text style={[styles.linkText, { color: colors.primary }]}>Open in Maps</Text>
+                </TouchableOpacity>
+              )} */}
+            </View>
+            
+          </View>
         ))}
-      </View>
 
-      <MapView
-        style={styles.map}
-        initialRegion={{
-          latitude: coordinates[0].latitude,
-          longitude: coordinates[0].longitude,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        }}
-      >
-        {coordinates.map((loc, index) => (
-          <Marker
-            key={index}
-            coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
-            title={loc.name}
-            description="New York"
-          />
-        ))}
 
-        <Polyline
-          coordinates={coordinates.map((loc) => ({
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-          }))}
-          strokeColor="#00FF00"
-          strokeWidth={4}
-        />
-      </MapView>
 
-      <Button
-        mode="contained"
-        buttonColor="#00FF00"
-        textColor="#000"
-        onPress={handleCheckIn}
-        style={styles.checkInButton}
-      >
-        Check In
-      </Button>
+        {/* Map Section */}
+        <Text style={[styles.header, { color: colors.text }]}>Map of Journey</Text>
+        <MapView
+          style={styles.map}
+          initialRegion= {initialRegion}
+        >
+          {coordinates.map((location, index) => (
+            <Marker
+              key={index}
+              coordinate={{
+                latitude: location.latitude,
+                longitude: location.longitude,
+              }}
+              title={location.name} // Name of the location
+            />
+          ))}
+        </MapView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        style={{ backgroundColor: 'red' }}
-      >
-        Check-in unsuccessful
-      </Snackbar>
-    </View>
+      </ScrollView>
+
+
+      
+    </SafeAreaView >
   );
 };
 
@@ -97,43 +112,97 @@ export default ResultScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    paddingTop: 56,
+    backgroundColor: '#121212',
+  },
+  scrollContent: {
+    flexGrow: 1, // Ensures scrollable content
+    alignItems: 'center', // Centered content within ScrollView
+    padding: 20,
   },
   image: {
     width: '100%',
-    height: 200,
+    height: 220,
     borderRadius: 12,
-    marginBottom: 12,
+    marginBottom: 20,
   },
-  header: {
-    fontSize: 22,
+  title: {
+    fontSize: 26,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  detailText: {
+  info: {
     fontSize: 16,
     marginBottom: 4,
   },
-  locationList: {
-    marginBottom: 12,
-  },
-  locationItem: {
+  details: {
     fontSize: 14,
-    marginBottom: 2,
-    marginLeft: 10,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  stepContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 30, // Space between steps
+  },
+  stepDetails: {
+    flexDirection: 'row',
+    marginTop: 10,
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  lining:{
+    flexDirection: 'column'
+  },
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#00FF00', // Green circle color
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  location: {
+    paddingLeft: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  transport: {
+    paddingLeft: 10,
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  linkContainer: {
+    marginTop: 5,
+  },
+  linkText: {
+    fontSize: 14,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  lineContainer: {
+    width: 2,
+    backgroundColor: '#00FF00', // Green line color
+    height: 40,
+    alignSelf: 'center',
+  },
+  line: {
+    flex: 1,
+    width: 2,
+    backgroundColor: '#00FF00',
   },
   map: {
-    width: Dimensions.get('window').width - 32,
-    height: 300,
+    width: Dimensions.get('window').width * 0.9, // 90% of the screen width
+    height: 300, // Height of the map
     borderRadius: 12,
-    marginTop: 10,
-    alignSelf: 'center',
+    marginBottom: 20,
   },
-  checkInButton: {
-    marginTop: 20,
-    borderRadius: 15,
-    alignSelf: 'center',
-    width: 150,
-  },
+
+
+
 });
