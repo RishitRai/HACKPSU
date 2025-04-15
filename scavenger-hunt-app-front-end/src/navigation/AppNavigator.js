@@ -12,6 +12,7 @@ import TripsScreen from '../screens/TripsScreen';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import ResultScreen  from '../screens/ResultScreen';
 import Leaderboard from '../screens/Leaderboard';
+import PreferenceResult from '../screens/PreferenceResult';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -74,6 +75,7 @@ const AppNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={BottomTabs} />
       <Stack.Screen name="RouteDetail" component={RouteDetailScreen} />
+      <Stack.Screen name = "PreferenceResult" component={PreferenceResult} />
       <Stack.Screen name="Result" component={ResultScreen} />
     </Stack.Navigator>
   );

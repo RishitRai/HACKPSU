@@ -6,6 +6,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Alert
 } from 'react-native';
 import {
   TextInput,
@@ -17,7 +18,8 @@ import {
 } from 'react-native-paper';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native'; // ✅ Import navigation
+import { useNavigation } from '@react-navigation/native';
+import axios from 'axios';
 
 const TRANSPORT_MODES = [
   { mode: 'walking', icon: 'directions-walk' },
@@ -28,26 +30,112 @@ const TRANSPORT_MODES = [
 ];
 
 const THEME_OPTIONS = [
-  { name: 'Attraction', color: '#ff3b30' },
-  { name: 'Religious', color: '#c0392b' },
-  { name: 'Shopping', color: '#e74c3c' },
-  { name: 'Fun', color: '#990000' },
+  { name: 'attraction', value: 'attraction' },
+  { name: 'religious', value: 'religious' },
+  { name: 'shopping', value: 'shopping' },
+  { name: 'entertainment', value: 'entertainment' },
 ];
 
 const TripPreferencesScreen = () => {
   const { colors } = useTheme();
-  const navigation = useNavigation(); // ✅ Use navigation
+  const navigation = useNavigation();
 
-  const [location, setLocation] = useState('');
-  const [isAccessible, setIsAccessible] = useState(false);
-  const [radius, setRadius] = useState(10);
-  const [selectedTheme, setSelectedTheme] = useState(null);
-  const [transportModes, setTransportModes] = useState([]);
+  const [address, setaddress] = useState('');
+  const [keyword, setKeyword] = useState([]);
+  const [radius, setRadius] = useState(30000);
+  const [accessibility, setaccessibility] = useState(false);
+  const [modes, setModes] = useState([]);
+  const [useCurrentAddress, setUseCurrentAddress] = useState(false);
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
 
+  const convertToMinutes = (hours, minutes) => {
+    return hours * 60 + minutes;
+  };
+
+  const sendPostRequest = async (parameters) => {
+    console.log('Sending parameters to backend:', parameters);
+    const response = await axios.post('http://100.64.14.73:5000/optimize_route', parameters, { timeout: 60000 });
+  
+    if (response && response.data && response.data.routes) {
+      // console.log('Response from backend:', response.data.routes);
+      Alert.alert('Server Response', JSON.stringify({routes: response.data.routes}, null, 2));
+      return {routes: response.data.routes}; // Return optimized routes
+    } else {
+      console.error('Error: Invalid response from backend.');
+      Alert.alert('Error', 'Failed to fetch data from the server. Please try again.');
+      return []; // Return an empty array
+    }
+  };
+
+  const fetchDataFromDatabase = async (parameters) => {
+    try {
+      const response = await axios.post(
+        'http://100.64.14.73:5000/get_data_from_parameters',
+        parameters,
+        { timeout: 60000 } // Set timeout for the request
+      );
+
+      //console.log("Raw response from database:", response);
+      //console.log("Response data:", response.data);
+
+      // Process the response data ONLY if the request was successful
+      const processedRoutes = response.data.routes.flatMap(item => item.routes);
+          // console.log("Processed response from database:", processedRoutes);
+      Alert.alert('Database Response', JSON.stringify({ routes: processedRoutes }, null, 2));
+      return { routes: processedRoutes }; // Return the object with the "routes" key
+    }
+    catch (error) {
+      //console.error('Error fetching data from database:', error);
+      return {routes: []}; // Return null in case of an error
+    }
+  };
+  
+  // Handle button press and show parameters in alert and JSON format
+  const handleSavePreferences = async () => {
+    const totalDuration = convertToMinutes(hours, minutes); // Convert time
+  
+    // Construct the parameters object
+    const parameters = {
+      address,
+      keyword,
+      radius,
+      accessibility,
+      modes, // Transport modes directly as array
+      use_current_location: useCurrentAddress,
+      time_per_location: 0, // Default time per location
+      time_limit: totalDuration
+    };
+  
+    const databaseData = await fetchDataFromDatabase(parameters); // Step 1: Query database
+  
+    if (databaseData && databaseData.routes && databaseData.routes.length > 0) {
+      console.log('Data found in database, navigating to PreferenceResult.');
+      navigation.navigate('PreferenceResult', { outp: databaseData.routes }); // Step 2: Use database data
+    } else {
+      // No relevant data found in database or an error occurred
+      console.log('No relevant data found in database or an error occurred, fetching from backend...');
+      const prefResult = await sendPostRequest(parameters); // Step 3: Fallback to backend
+      if (prefResult && prefResult.routes && prefResult.routes.length > 0) {
+        navigation.navigate('PreferenceResult', { outp: prefResult.routes }); // Use backend data
+      } else {
+        console.log('Backend also failed or returned no data.');
+        Alert.alert('Error', 'Failed to fetch route data. Please try again.');
+    }
+  }
+  };
+  
+
+    // Shows parameters as alert
+    //Alert.alert('Trip Preferences', JSON.stringify(parameters, null, 2));
+
+    // Log parameters as a JSON file to console
+    // console.log('Trip Preferences:', parameters);
+
+    // Send POST request to server with parameters
+
   const toggleTransportMode = (mode) => {
-    setTransportModes((prevModes) => {
+    setModes((prevModes) => {
       if (prevModes.includes(mode)) {
         return prevModes.filter((m) => m !== mode);
       } else if (prevModes.length < 2) {
@@ -58,10 +146,20 @@ const TripPreferencesScreen = () => {
     });
   };
 
-  const handleSavePreferences = () => {
-    navigation.navigate('Selection');
-
+  const toggleTheme = (theme) => {
+    setKeyword((prevKeywords) => {
+      if (prevKeywords.includes(theme)) {
+        return prevKeywords.filter((k) => k !== theme);
+      } else {
+        return [...prevKeywords, theme];
+      }
+    });
   };
+
+  // const handleSavePreferences = () => {
+  //   navigation.navigate('Selection');
+
+  // };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -72,12 +170,12 @@ const TripPreferencesScreen = () => {
       >
         <Text style={[styles.header, { color: colors.text }]}>Plan Your Perfect Trip</Text>
 
-        <Text style={[styles.label, { color: colors.text }]}>Location</Text>
+        <Text style={[styles.label, { color: colors.text }]}>address</Text>
         <TextInput
           mode="outlined"
-          placeholder="Search for location..."
-          value={location}
-          onChangeText={setLocation}
+          placeholder="Search for address..."
+          value={address}
+          onChangeText={setaddress}
           textColor={colors.text}
           placeholderTextColor="#aaa"
           style={[styles.searchInput, { color: colors.text }]}
@@ -89,14 +187,14 @@ const TripPreferencesScreen = () => {
           <Text style={[styles.label, { color: colors.text }]}>Accessibility</Text>
           <View style={styles.switchContainer}>
             <MaterialIcons
-              name={isAccessible ? 'accessible-forward' : 'not-accessible'}
+              name={accessibility ? 'accessible-forward' : 'not-accessible'}
               size={24}
               style={{ marginRight: 10 }}
-              color={isAccessible ? colors.primary : '#888'}
+              color={accessibility ? colors.primary : '#888'}
             />
             <Switch
-              value={isAccessible}
-              onValueChange={() => setIsAccessible(!isAccessible)}
+              value={accessibility}
+              onValueChange={() => setaccessibility(!accessibility)}
               color={colors.primary}
             />
           </View>
@@ -109,9 +207,9 @@ const TripPreferencesScreen = () => {
           <Text style={[styles.radiusValue, { color: colors.text }]}>{radius} miles</Text>
           <Slider
             style={styles.slider}
-            minimumValue={1}
-            maximumValue={250}
-            step={1}
+            minimumValue={1000}
+            maximumValue={50000}
+            step={1000}
             minimumTrackTintColor={colors.primary}
             maximumTrackTintColor={colors.placeholder}
             value={radius}
@@ -147,18 +245,17 @@ const TripPreferencesScreen = () => {
 
         <Divider style={styles.divider} />
 
-        <Text style={[styles.label, { color: colors.text }]}>Choose a Theme</Text>
+        <Text style={styles.label}>Choose a Theme</Text>
         <View style={styles.themeContainer}>
-          {THEME_OPTIONS.map(({ name, color }, idx) => {
-            const isSelected = color === selectedTheme;
+          {THEME_OPTIONS.map(({ name, value }, idx) => {
+            const isSelected = keyword.includes(value);
             return (
               <TouchableOpacity
                 key={idx}
-                onPress={() => setSelectedTheme(color)}
+                onPress={() => toggleTheme(value)}
                 style={[
                   styles.themeButton,
                   {
-                    backgroundColor: color,
                     borderWidth: isSelected ? 3 : 0,
                     borderColor: isSelected ? '#ffffff' : 'transparent',
                   },
@@ -173,9 +270,9 @@ const TripPreferencesScreen = () => {
         <Divider style={styles.divider} />
 
         <Text style={[styles.label, { color: colors.text }]}>Transport Mode (max 2)</Text>
-        <View style={styles.transportModes}>
+        <View style={styles.modes}>
           {TRANSPORT_MODES.map(({ mode, icon }) => {
-            const isSelected = transportModes.includes(mode);
+            const isSelected = modes.includes(mode);
             return (
               <TouchableOpacity
                 key={mode}
@@ -241,7 +338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   themeName: { color: '#fff', fontWeight: '600' },
-  transportModes: {
+  modes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: 8,

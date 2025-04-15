@@ -617,8 +617,7 @@ class RouteOptimizer:
                 return True
             else:
                 return False
-        except Exception as e:
-            print(f"Error checking user location: {e}")
+        except:
             return False
 
     

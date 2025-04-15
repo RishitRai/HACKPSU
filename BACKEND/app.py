@@ -5,6 +5,7 @@ import os
 import json
 from dotenv import load_dotenv
 from generator_code import RouteOptimizer  # Import your RouteOptimizer class
+from utils import query_database, get_database_outputs
 
 # Load API keys from .env
 load_dotenv()
@@ -45,7 +46,8 @@ def get_inputs():
     except Exception as e:
         # Handle errors
         return jsonify({"error": str(e)}), 500
-
+    
+    
 
 @app.route('/get_outputs', methods=['GET'])
 def get_outputs():
@@ -97,6 +99,42 @@ def get_outputs():
         # Handle errors
         return jsonify({"error": str(e)}), 500
 
+# @app.route('/get_data_by_parameters', methods=['POST'])
+# def get_data_by_parameters():
+#     try:
+#         # Parse JSON parameters from the client
+#         parameters = request.json
+#         print("Received parameters:", parameters)
+
+#         # Step 1: Query the database for the input ID
+#         input_id = query_database(inputs_collection, parameters)
+
+#         if input_id:
+#             # Step 2: Fetch the associated outputs
+#             outputs = get_outputs(outputs_collection, input_id)
+#             return jsonify({"data": outputs}), 200
+#         else:
+#             # No matching input found in the database
+#             return jsonify({"error": "No matching input found"}), 404
+#     except Exception as e:
+#         print("Error processing request:", e)
+#         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/get_data_from_parameters', methods=['POST'])
+def get_data_from_parameters():
+    # Get JSON input from the client
+    parameters = request.json
+    #print("Received parameters:", parameters)
+    input_id = query_database(inputs_collection, parameters)
+
+    if input_id:
+        outputs = get_database_outputs(outputs_collection, input_id)
+        return jsonify({"routes": outputs})
+    else:
+        return jsonify({"routes": "[]"})
+
+
 
 
 # Initialize RouteOptimizer
@@ -111,7 +149,7 @@ def optimize_route():
 
         # Extract parameters from frontend request
         address = data.get("address")
-        keywords = data.get("keywords", [])
+        keywords = data.get("keyword", [])
         radius = data.get("radius", 30000)
         accessibility = data.get("accessibility", False)
         user_modes = data.get("modes", ["driving"])
@@ -165,11 +203,11 @@ def check_user_location():
 
         return jsonify({"is_at_location": is_at_location})  # Return the result to the frontend
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500    
+    except:
+        return False   
 
 
 # Run Flask App
 if __name__ == "__main__":
-    app.run(debug=True, host = '100.64.7.174')
+    app.run(debug=True, host = '100.64.14.73')
     #app.run(debug=True)
