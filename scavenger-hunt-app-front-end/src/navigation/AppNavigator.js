@@ -8,7 +8,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import TripPreferencesScreen from '../screens/TripPreferencesScreen';
 import TripSelectionScreen from '../screens/TripSelectionScreen';
-import TripsScreen from '../screens/TripsScreen';
+import CheckpointChecker from '../screens/CheckpointChecker';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import ResultScreen  from '../screens/ResultScreen';
 import Leaderboard from '../screens/Leaderboard';
@@ -76,6 +76,7 @@ const AppNavigator = () => {
       <Stack.Screen name="Main" component={BottomTabs} />
       <Stack.Screen name="RouteDetail" component={RouteDetailScreen} />
       <Stack.Screen name = "PreferenceResult" component={PreferenceResult} />
+      <Stack.Screen name="CheckpointChecker" component={CheckpointChecker} />
       <Stack.Screen name="Result" component={ResultScreen} />
     </Stack.Navigator>
   );

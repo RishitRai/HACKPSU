@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from flask_cors import CORS
 import os
 import json
+import requests
 from dotenv import load_dotenv
 from generator_code import RouteOptimizer  # Import your RouteOptimizer class
 from utils import query_database, get_database_outputs
@@ -24,6 +25,111 @@ db = client['routeOptimizer']  # Replace with your database name
 
 inputs_collection = db['inputs']  # Collection for inputs
 outputs_collection = db['outputs']  # Collection for outputs
+
+
+# Vision API configuration
+VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
+
+@app.route('/verify_location_image', methods=['POST'])
+def verify_location_image():
+    """
+    API endpoint to verify a location based on image.
+    Takes an image and compares it with the expected location attributes.
+    """
+    try:
+        data = request.json
+        image_base64 = data.get('image')
+        location_name = data.get('location_name')
+        location_lat = data.get('location_lat')
+        location_lng = data.get('location_lng')
+        
+        if not image_base64 or not location_name:
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        # Prepare the Vision API request for both label and landmark detection
+        vision_request = {
+            "requests": [
+                {
+                    "image": {
+                        "content": image_base64  # The API accepts base64 directly
+                    },
+                    "features": [
+                        {"type": "LABEL_DETECTION", "maxResults": 10},
+                        {"type": "LANDMARK_DETECTION", "maxResults": 5}
+                    ]
+                }
+            ]
+        }
+        
+        # Send request to Vision API
+        response = requests.post(
+            f"{VISION_API_URL}?key={api}",
+            json=vision_request
+        )
+        
+        if response.status_code != 200:
+            print(f"Vision API error: {response.text}")
+            return jsonify({
+                "error": "Vision API request failed",
+                "status_code": response.status_code
+            }), 500
+        
+        # Process the API response
+        vision_data = response.json()
+        
+        # Extract label annotations
+        labels = []
+        if 'labelAnnotations' in vision_data['responses'][0]:
+            labels = vision_data['responses'][0]['labelAnnotations']
+        
+        # Extract landmark annotations
+        landmarks = []
+        if 'landmarkAnnotations' in vision_data['responses'][0]:
+            landmarks = vision_data['responses'][0]['landmarkAnnotations']
+        
+        # Check if any landmarks are found
+        landmark_match = False
+        for landmark in landmarks:
+            # Check if landmark name matches or is similar to expected location
+            if location_name.lower() in landmark['description'].lower():
+                landmark_match = True
+                break
+        
+        # Check if relevant labels are present that match the location type
+        relevant_labels = []
+        relevant_labels = []
+        location_keywords = location_name.lower().split()
+        
+        for label in labels:
+            if any(keyword in label['description'].lower() for keyword in location_keywords):
+                relevant_labels.append(label['description'])
+        
+        # For demo purposes, we'll consider it a match if:
+        # 1. A landmark is explicitly recognized, OR
+        # 2. At least 1 relevant labels match the location name
+        is_match = landmark_match or len(relevant_labels) >= 1
+
+        print(f"Final verification result: {'MATCH' if is_match else 'NO MATCH'}")
+        print(f"Match criteria: landmark_match={landmark_match}, relevant_labels={len(relevant_labels)}")
+        
+        return jsonify({
+            "is_match": is_match,
+            "landmark_detected": landmark_match,
+            "relevant_labels": relevant_labels,
+            "confidence": 0.85 if is_match else 0.4,
+            "debug": {
+                "total_labels_detected": len(labels),
+                "total_landmarks_detected": len(landmarks)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error in image verification: {e}")
+        return jsonify({
+            "error": str(e),
+            "message": "Error processing image verification request"
+        }), 500
+
 
 @app.route('/get_inputs', methods=['GET'])
 def get_inputs():

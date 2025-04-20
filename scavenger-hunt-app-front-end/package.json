@@ -30,7 +30,10 @@
     "react-native-screen": "^1.0.1",
     "react-native-screens": "~4.4.0",
     "react-native-svg": "^15.11.2",
-    "react-native-vector-icons": "^10.2.0"
+    "react-native-vector-icons": "^10.2.0",
+    "expo-image-picker": "~16.0.6",
+    "expo-file-system": "~18.0.12",
+    "expo-camera": "~16.0.18"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

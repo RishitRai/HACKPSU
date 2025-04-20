@@ -1,10 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, SafeAreaView, Dimensions, FlatList, Linking, TouchableOpacity, ScrollView } from 'react-native';
-import { useTheme } from '@react-navigation/native';
+import { View, Text, StyleSheet, Image, SafeAreaView, Dimensions, Linking, TouchableOpacity, ScrollView } from 'react-native';
+import { useTheme, Button } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
 
-
-const ResultScreen = ({ route }) => {
+const ResultScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { trip } = route.params;
 
@@ -21,9 +20,16 @@ const ResultScreen = ({ route }) => {
     longitudeDelta: 0.009,
   };
 
+  const navigateToDestination = (index) => {
+    navigation.navigate('CheckpointChecker', {
+      currentIndex: index,
+      nextIndex: index + 1 < trip.destinations.length ? index + 1 : index,
+      trip: trip
+    });
+  };
 
   return (
-    <SafeAreaView  style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Image source={trip.image} style={styles.image} />
         <Text style={[styles.title, { color: colors.text }]}>{trip.name}</Text>
@@ -33,13 +39,10 @@ const ResultScreen = ({ route }) => {
         <Text style={{ color: colors.text }}>Ratings: {trip.ratings}</Text>
         <Text style={{ color: colors.text }}>Popularity: {trip.popularity}</Text>
 
-        
         <Text style={[styles.header, { color: colors.text }]}>Journey for {trip.name}</Text>
 
         {trip.destinations.map((destination, index) => (
           <View key={index} style={styles.stepContainer}>
-
-
             <View style={styles.lining}>
               <View style={styles.circle}>
                 <Text style={styles.circleText}>{index + 1}</Text>
@@ -52,40 +55,30 @@ const ResultScreen = ({ route }) => {
               )}
             </View>
             
-
-
             <View style={styles.stepDetails}>
-              <Text style={[styles.location, { color: colors.text }]}>{destination.name}</Text>
-              <Text style={[styles.transport, { color: colors.text }]}>
-                Mode: {destination.modeOfTransport}
-              </Text>
-
-              {/* {destination.mapLink && (
-                <TouchableOpacity
-                  style={styles.linkContainer}
-                  onPress={() => {
-                    if (destination.mapLink.startsWith('http')) {
-                      Linking.openURL(destination.mapLink);
-                    } else {
-                      alert('Not a valid URL');
-                    }
-                  }}
-                >
-                  <Text style={[styles.linkText, { color: colors.primary }]}>Open in Maps</Text>
-                </TouchableOpacity>
-              )} */}
+              <View>
+                <Text style={[styles.location, { color: colors.text }]}>{destination.name}</Text>
+                <Text style={[styles.transport, { color: colors.text }]}>
+                  Mode: {destination.modeOfTransport}
+                </Text>
+              </View>
+              
+              {/* Navigation Button */}
+              <TouchableOpacity 
+                style={styles.navButton}
+                onPress={() => navigateToDestination(index)}
+              >
+                <Text style={styles.navButtonText}>Navigate</Text>
+              </TouchableOpacity>
             </View>
-            
           </View>
         ))}
-
-
 
         {/* Map Section */}
         <Text style={[styles.header, { color: colors.text }]}>Map of Journey</Text>
         <MapView
           style={styles.map}
-          initialRegion= {initialRegion}
+          initialRegion={initialRegion}
         >
           {coordinates.map((location, index) => (
             <Marker
@@ -94,16 +87,21 @@ const ResultScreen = ({ route }) => {
                 latitude: location.latitude,
                 longitude: location.longitude,
               }}
-              title={location.name} // Name of the location
+              title={location.name}
             />
           ))}
         </MapView>
 
+        {/* Start Journey Button */}
+        <Button 
+          mode="contained" 
+          style={styles.startButton}
+          onPress={() => navigateToDestination(0)}
+        >
+          Start Journey
+        </Button>
       </ScrollView>
-
-
-      
-    </SafeAreaView >
+    </SafeAreaView>
   );
 };
 
@@ -115,9 +113,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#121212',
   },
   scrollContent: {
-    flexGrow: 1, // Ensures scrollable content
-    alignItems: 'center', // Centered content within ScrollView
+    flexGrow: 1,
+    alignItems: 'center',
     padding: 20,
+    paddingBottom: 40,
   },
   image: {
     width: '100%',
@@ -139,25 +138,34 @@ const styles = StyleSheet.create({
     marginTop: 20,
     textAlign: 'center',
   },
+  header: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 24,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
   stepContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30, // Space between steps
+    marginBottom: 30,
+    width: '100%',
   },
   stepDetails: {
+    flex: 1,
     flexDirection: 'row',
-    marginTop: 10,
     alignItems: 'center',
-    textAlign: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 10,
   },
-  lining:{
-    flexDirection: 'column'
+  lining: {
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   circle: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#00FF00', // Green circle color
+    backgroundColor: '#00FF00',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -167,27 +175,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   location: {
-    paddingLeft: 10,
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 5,
   },
   transport: {
-    paddingLeft: 10,
     fontSize: 14,
     marginBottom: 5,
   },
-  linkContainer: {
-    marginTop: 5,
-  },
-  linkText: {
-    fontSize: 14,
-    textDecorationLine: 'underline',
-    fontWeight: '600',
-  },
   lineContainer: {
     width: 2,
-    backgroundColor: '#00FF00', // Green line color
     height: 40,
     alignSelf: 'center',
   },
@@ -197,12 +194,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#00FF00',
   },
   map: {
-    width: Dimensions.get('window').width * 0.9, // 90% of the screen width
-    height: 300, // Height of the map
+    width: Dimensions.get('window').width * 0.9,
+    height: 300,
     borderRadius: 12,
     marginBottom: 20,
   },
-
-
-
+  navButton: {
+    backgroundColor: '#00FF00',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navButtonText: {
+    color: '#000000',
+    fontWeight: 'bold',
+  },
+  startButton: {
+    backgroundColor: '#00FF00',
+    width: '100%',
+    marginTop: 16,
+    borderRadius: 8,
+  },
 });
