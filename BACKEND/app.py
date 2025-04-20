@@ -5,6 +5,8 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from generator_code import RouteOptimizer  # Import your RouteOptimizer class
 from utils import query_database, get_database_outputs
 
@@ -15,6 +17,8 @@ gen_key = os.getenv("GEN_API")
 class_url = os.getenv("CLASS_URL")
 class_key = os.getenv("CLASS_KEY")
 search_id = os.getenv("SEARCH_ID")
+
+genai_client = genai.Client(api_key=gen_key)
 
 # Initialize Flask App
 app = Flask(__name__)
@@ -129,7 +133,277 @@ def verify_location_image():
             "error": str(e),
             "message": "Error processing image verification request"
         }), 500
+    
 
+
+
+
+
+# Add this function to your Flask app (paste-2.txt)
+
+@app.route('/generate_location_hint', methods=['POST'])
+def generate_location_hint():
+    """
+    API endpoint to generate hints for a location quiz using Gemini API.
+    Takes a location name, previous hint ID (if any), and user's response (understood/confused)
+    Returns the next appropriate hint from a hierarchical tree structure.
+    """
+    try:
+        data = request.json
+        location_name = data.get('location_name')
+        previous_hint_id = data.get('previous_hint_id', None)
+        user_response = data.get('user_response', None)  # "understood" or "confused"
+        reject_count = data.get('reject_count', 0)
+        accept_count = data.get('accept_count', 0)
+
+        # Handle the case when previous_hint_id is "final"
+        if previous_hint_id == "final":
+            return jsonify({
+                "hint": {
+                    "id": "final",
+                    "text": f"The answer is {location_name}.",
+                    "type": "factual"
+                },
+                "is_final": True,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        # Check if we've reached the maximum number of accepts/rejects
+        if reject_count >= 7 or accept_count >= 7:
+            return jsonify({
+                "hint": {
+                    "id": "final",
+                    "text": f"The answer is {location_name}.",
+                    "type": "factual"
+                },
+                "is_final": True,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        # If this is the first hint request or no previous hint
+        if previous_hint_id is None:
+            # Generate initial hint tree from Gemini
+            hint_tree = generate_hint_tree_from_gemini(location_name)
+            
+            # Return the first hint (root of the tree)
+            return jsonify({
+                "hint": {
+                    "id": "1",
+                    "text": hint_tree["tree"]["1"]["text"],
+                    "type": hint_tree["tree"]["1"]["type"]
+                },
+                "is_final": False,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        # If we have a previous hint, determine the next hint based on user response
+        else:
+            # Get the entire hint tree first
+            hint_tree = generate_hint_tree_from_gemini(location_name)
+            
+            # Find the next hint ID based on previous hint and user response
+            next_hint_id = None
+            if user_response == "understood":
+                next_hint_id = hint_tree["tree"][previous_hint_id]["on_understood"]
+                accept_count += 1
+            elif user_response == "confused":
+                next_hint_id = hint_tree["tree"][previous_hint_id]["on_confused"]
+                reject_count += 1
+            
+            # If there's no next hint or we've reached the limit, return final answer
+            if next_hint_id is None or reject_count >= 7 or accept_count >= 7:
+                return jsonify({
+                    "hint": {
+                        "id": "final",
+                        "text": f"The answer is {location_name}.",
+                        "type": "factual"
+                    },
+                    "is_final": True,
+                    "reject_count": reject_count,
+                    "accept_count": accept_count
+                })
+            
+            # Otherwise, return the next hint
+            return jsonify({
+                "hint": {
+                    "id": next_hint_id,
+                    "text": hint_tree["tree"][next_hint_id]["text"],
+                    "type": hint_tree["tree"][next_hint_id]["type"]
+                },
+                "is_final": False,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+    
+    except Exception as e:
+        print(f"Error generating location hint: {str(e)}")
+        return jsonify({
+            "error": str(e),
+            "message": "Error processing hint generation request"
+        }), 500
+
+def generate_hint_tree_from_gemini(location_name):
+    """
+    Uses Gemini API to generate a structured hint tree for a location.
+    """
+    try:
+        # Construct the prompt for Gemini
+        prompt = f"""Generate hints for a location quiz about {location_name}. 
+        Structure the response as a JSON object with the following format:
+        {{
+          "place_id": "{location_name.lower().replace(' ', '_')}",
+          "tree": {{
+            "1": {{
+              "text": "[First hint - should be vague/symbolic]",
+              "type": "symbolic",
+              "on_understood": "2A",
+              "on_confused": "2B"
+            }},
+            "2A": {{
+              "text": "[Second level hint for those who recognized something from hint 1]",
+              "type": "symbolic",
+              "on_understood": "3A",
+              "on_confused": "2B"
+            }},
+            "2B": {{
+              "text": "[Second level hint for those who didn't recognize hint 1]",
+              "type": "location",
+              "on_understood": "3B",
+              "on_confused": "3C"
+            }},
+            "3A": {{
+              "text": "[More specific hint]",
+              "type": "factual",
+              "on_understood": "4A",
+              "on_confused": "3C"
+            }},
+            "3B": {{
+              "text": "[More specific location-based hint]",
+              "type": "location",
+              "on_understood": "4B",
+              "on_confused": "3C"
+            }},
+            "3C": {{
+              "text": "[More direct hint]",
+              "type": "factual",
+              "on_understood": "4C",
+              "on_confused": "final"
+            }},
+            "4A": {{
+              "text": "[Almost revealing hint]",
+              "type": "factual",
+              "on_understood": "final",
+              "on_confused": "final"
+            }},
+            "4B": {{
+              "text": "[Almost revealing location hint]",
+              "type": "location",
+              "on_understood": "final",
+              "on_confused": "final"
+            }},
+            "4C": {{
+              "text": "[Very obvious hint]",
+              "type": "factual",
+              "on_understood": "final",
+              "on_confused": "final"
+            }}
+          }}
+        }}
+        Only return the JSON with no other text."""
+        
+        # Call Gemini API using the client library
+        response = genai_client.models.generate_content(
+            model='gemini-2.0-flash-001',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=1024,
+            )
+        )
+        
+        # Extract generated text from response
+        generated_text = response.text
+        
+        # Extract just the JSON part if there's any extra text
+        import re
+        json_match = re.search(r'({.*})', generated_text, re.DOTALL)
+        if json_match:
+            generated_text = json_match.group(1)
+        
+        # Parse the JSON
+        hint_tree = json.loads(generated_text)
+        return hint_tree
+        
+    except Exception as e:
+        print(f"Error calling Gemini API: {str(e)}")
+        return generate_fallback_hint_tree(location_name)
+
+def generate_fallback_hint_tree(location_name):
+    """
+    Generate a fallback hint tree if the Gemini API fails.
+    """
+    return {
+        "place_id": location_name.lower().replace(' ', '_'),
+        "tree": {
+            "1": {
+                "text": f"This is a popular destination to visit.",
+                "type": "symbolic",
+                "on_understood": "2A",
+                "on_confused": "2B"
+            },
+            "2A": {
+                "text": f"It's a famous landmark people often photograph.",
+                "type": "symbolic",
+                "on_understood": "3A",
+                "on_confused": "2B"
+            },
+            "2B": {
+                "text": f"It's a notable location in this area.",
+                "type": "location",
+                "on_understood": "3B",
+                "on_confused": "3C"
+            },
+            "3A": {
+                "text": f"It's an attraction that draws many tourists.",
+                "type": "factual",
+                "on_understood": "4A",
+                "on_confused": "3C"
+            },
+            "3B": {
+                "text": f"You can find it on most travel itineraries.",
+                "type": "location",
+                "on_understood": "4B",
+                "on_confused": "3C"
+            },
+            "3C": {
+                "text": f"It's a must-see destination in this region.",
+                "type": "factual",
+                "on_understood": "4C",
+                "on_confused": "final"
+            },
+            "4A": {
+                "text": f"It's known as one of the highlights of this area.",
+                "type": "factual",
+                "on_understood": "final",
+                "on_confused": "final"
+            },
+            "4B": {
+                "text": f"It appears on postcards and souvenirs from here.",
+                "type": "location",
+                "on_understood": "final",
+                "on_confused": "final"
+            },
+            "4C": {
+                "text": f"It's almost certainly {location_name}.",
+                "type": "factual",
+                "on_understood": "final",
+                "on_confused": "final"
+            }
+        }
+    }
 
 @app.route('/get_inputs', methods=['GET'])
 def get_inputs():

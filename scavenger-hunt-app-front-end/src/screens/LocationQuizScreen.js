@@ -5,38 +5,77 @@ import {
   StyleSheet, 
   Dimensions, 
   Animated, 
-  PanResponder, 
   Image, 
   TouchableOpacity,
-  SafeAreaView
+  SafeAreaView,
+  ActivityIndicator
 } from 'react-native';
-import { useTheme, Button, Icon } from 'react-native-paper';
+import { useTheme, Button } from 'react-native-paper';
+import axios from 'axios';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const SWIPE_THRESHOLD = 0.25 * SCREEN_WIDTH;
-const SWIPE_OUT_DURATION = 250;
 
 const LocationQuizScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
   const { currentIndex, nextIndex, trip } = route.params;
   const destination = trip.destinations[nextIndex];
   
-  // Quiz data - we'll generate this based on the destination
+  // Quiz data
   const [quizData, setQuizData] = useState([]);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [correctGuess, setCorrectGuess] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   
-  const position = useRef(new Animated.ValueXY()).current;
+  // Hint state
+  const [currentHint, setCurrentHint] = useState("");
+  const [currentHintId, setCurrentHintId] = useState(null);
+  const [isHintFinal, setIsHintFinal] = useState(false);
+  const [loadingHints, setLoadingHints] = useState(true);
+  const [rejectCount, setRejectCount] = useState(0);
+  const [acceptCount, setAcceptCount] = useState(0);
   
-  // Generate quiz questions based on the destination
+  // Generate quiz questions and fetch first hint
   useEffect(() => {
     generateQuizQuestions();
+    fetchNextHint();
   }, []);
   
+  const fetchNextHint = async (userResponse = null) => {
+    try {
+
+      if (isHintFinal) {
+        return;
+      }
+      
+      setLoadingHints(true);
+      
+      const response = await axios.post(
+        'http://100.64.14.73:5000/generate_location_hint',
+        {
+          location_name: destination.name,
+          previous_hint_id: currentHintId,
+          user_response: userResponse,
+          reject_count: rejectCount,
+          accept_count: acceptCount
+        }
+      );
+      
+      const { hint, is_final } = response.data;
+      
+      setCurrentHint(hint.text);
+      setCurrentHintId(hint.id);
+      setIsHintFinal(is_final);
+      setLoadingHints(false);
+      
+    } catch (error) {
+      console.error("Error fetching hint:", error);
+      setCurrentHint("This is a popular location in this area.");
+      setLoadingHints(false);
+    }
+  };
+  
   const generateQuizQuestions = () => {
-    // This would ideally come from an API or database
-    // For now we'll create mock questions based on the destination
+    // Create questions based on the destination
     const questions = [
       {
         question: "What is this location?",
@@ -45,7 +84,6 @@ const LocationQuizScreen = ({ route, navigation }) => {
           { text: "Central Park", isCorrect: false },
           { text: "Times Square", isCorrect: false },
         ],
-        hint: "This is a popular destination in the area."
       },
       {
         question: "What can you find at this location?",
@@ -54,7 +92,6 @@ const LocationQuizScreen = ({ route, navigation }) => {
           { text: "Historical landmarks", isCorrect: true },
           { text: "Amusement rides", isCorrect: false },
         ],
-        hint: "Think about what this place is known for."
       },
       {
         question: "What's the best way to travel to this location?",
@@ -63,53 +100,43 @@ const LocationQuizScreen = ({ route, navigation }) => {
           { text: "By subway", isCorrect: false },
           { text: destination.modeOfTransport, isCorrect: true },
         ],
-        hint: "Check the recommended mode of transport in your journey."
       }
     ];
     
     setQuizData(questions);
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (event, gesture) => {
-        position.setValue({ x: gesture.dx, y: 0 });
-      },
-      onPanResponderRelease: (event, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          forceSwipe('right');
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          forceSwipe('left');
-        } else {
-          resetPosition();
-        }
+  // Function to handle hint feedback
+  const handleHintFeedback = (understood) => {
+    if (isHintFinal) return;
+    
+    const userResponse = understood ? "understood" : "confused";
+    
+    // Increment counters separately from the API call
+    if (understood) {
+      // Check if we're already at the limit
+      if (acceptCount < 7) {
+        setAcceptCount(prev1 => prev1 + 1);
       }
-    })
-  ).current;
-
-  const forceSwipe = (direction) => {
-    const x = direction === 'right' ? SCREEN_WIDTH : -SCREEN_WIDTH;
-    Animated.timing(position, {
-      toValue: { x, y: 0 },
-      duration: SWIPE_OUT_DURATION,
-      useNativeDriver: false
-    }).start(() => onSwipeComplete(direction));
+    } else {
+      // Check if we're already at the limit
+      if (rejectCount < 7) {
+        setRejectCount(prev => prev + 1);
+      }
+    }
+    
+    fetchNextHint(userResponse);
   };
 
-  const onSwipeComplete = (direction) => {
-    const item = quizData[currentCardIndex];
-    let optionIndex = direction === 'right' ? 0 : (direction === 'left' ? 2 : 1);
-    
-    // Check if the swipe corresponds to the correct answer
-    if (item.options[optionIndex].isCorrect) {
+  // Handle answer selection
+  const handleAnswerSelection = (option) => {
+    if (option.isCorrect) {
       setCorrectGuess(true);
       setQuizCompleted(true);
     } else {
       // Move to next card if available
       if (currentCardIndex < quizData.length - 1) {
         setCurrentCardIndex(currentCardIndex + 1);
-        position.setValue({ x: 0, y: 0 });
       } else {
         // No more cards, quiz is over
         setQuizCompleted(true);
@@ -117,26 +144,7 @@ const LocationQuizScreen = ({ route, navigation }) => {
     }
   };
 
-  const resetPosition = () => {
-    Animated.spring(position, {
-      toValue: { x: 0, y: 0 },
-      useNativeDriver: false
-    }).start();
-  };
-
-  const getCardStyle = () => {
-    const rotate = position.x.interpolate({
-      inputRange: [-SCREEN_WIDTH * 1.5, 0, SCREEN_WIDTH * 1.5],
-      outputRange: ['-30deg', '0deg', '30deg']
-    });
-
-    return {
-      ...position.getLayout(),
-      transform: [{ rotate }]
-    };
-  };
-
-  const renderCard = () => {
+  const renderCurrentQuestion = () => {
     if (currentCardIndex >= quizData.length) {
       return renderNoMoreCards();
     }
@@ -144,43 +152,71 @@ const LocationQuizScreen = ({ route, navigation }) => {
     const item = quizData[currentCardIndex];
     
     return (
-      <Animated.View
-        style={[styles.cardStyle, getCardStyle()]}
-        {...panResponder.panHandlers}
-      >
+      <View style={styles.cardStyle}>
         <View style={styles.cardContent}>
           <Text style={styles.questionText}>{item.question}</Text>
           
-          <View style={styles.optionsContainer}>
-            <View style={[styles.optionIndicator, { backgroundColor: '#00FF00' }]}>
-              <Text style={styles.optionIndicatorText}>← Swipe</Text>
-            </View>
-            
-            <View style={styles.optionsRow}>
-              <View style={styles.option}>
-                <Text style={styles.optionText}>{item.options[2].text}</Text>
-              </View>
-              
-              <View style={styles.option}>
-                <Text style={styles.optionText}>{item.options[1].text}</Text>
-              </View>
-              
-              <View style={styles.option}>
-                <Text style={styles.optionText}>{item.options[0].text}</Text>
-              </View>
-            </View>
-            
-            <View style={[styles.optionIndicator, { backgroundColor: '#FF4500' }]}>
-              <Text style={styles.optionIndicatorText}>Swipe →</Text>
-            </View>
-          </View>
-          
+          {/* Hint Section */}
           <View style={styles.hintContainer}>
             <Text style={styles.hintTitle}>Hint:</Text>
-            <Text style={styles.hintText}>{item.hint}</Text>
+            {loadingHints ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#00FF00" />
+                <Text style={styles.loadingText}>Generating hint...</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.hintText}>{currentHint}</Text>
+                {!isHintFinal && (
+                  <View style={styles.hintStats}>
+                    <Text style={styles.hintStatsText}>
+                      Helps: {acceptCount}/7 | Skip: {rejectCount}/7
+                    </Text>
+                  </View>
+                )}
+                {!isHintFinal && (
+                  <View style={styles.hintFeedbackContainer}>
+                    <TouchableOpacity 
+                      style={[
+                        styles.hintFeedbackButton,
+                        acceptCount >= 7 && styles.disabledButton
+                      ]}
+                      onPress={() => handleHintFeedback(true)}
+                      disabled={acceptCount >= 7}
+                    >
+                      <Text style={styles.hintFeedbackText}>I understand this hint</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[
+                        styles.hintFeedbackButton, 
+                        styles.hintFeedbackButtonNegative,
+                        rejectCount >= 7 && styles.disabledButton
+                      ]}
+                      onPress={() => handleHintFeedback(false)}
+                      disabled={rejectCount >= 7}
+                    >
+                      <Text style={styles.hintFeedbackText}>I need more help</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+          
+          {/* Answer Options */}
+          <View style={styles.answerButtonsContainer}>
+            {item.options.map((option, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.answerButton}
+                onPress={() => handleAnswerSelection(option)}
+              >
+                <Text style={styles.answerButtonText}>{option.text}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -243,7 +279,7 @@ const LocationQuizScreen = ({ route, navigation }) => {
       </View>
       
       <View style={styles.cardContainer}>
-        {renderCard()}
+        {renderCurrentQuestion()}
       </View>
       
       <TouchableOpacity
@@ -279,11 +315,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
   },
   cardStyle: {
-    position: 'absolute',
-    width: SCREEN_WIDTH * 0.9,
-    height: 400,
+    width: '100%',
     borderRadius: 15,
     backgroundColor: '#222222',
     elevation: 5,
@@ -293,9 +328,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   cardContent: {
-    flex: 1,
     padding: 20,
-    justifyContent: 'space-between',
   },
   questionText: {
     fontSize: 22,
@@ -304,40 +337,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  optionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  optionIndicator: {
-    padding: 10,
-    borderRadius: 10,
-    width: 80,
-  },
-  optionIndicatorText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  optionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '60%',
-  },
-  option: {
-    alignItems: 'center',
-  },
-  optionText: {
-    color: '#FFFFFF',
-    textAlign: 'center',
-    width: 60,
-  },
   hintContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     padding: 15,
     borderRadius: 10,
-    marginTop: 20,
+    marginBottom: 20,
   },
   hintTitle: {
     color: '#00FF00',
@@ -346,6 +350,61 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: '#DDDDDD',
+  },
+  hintStats: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  hintStatsText: {
+    color: '#AAAAAA',
+    fontSize: 12,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  loadingText: {
+    color: '#DDDDDD',
+    marginLeft: 10,
+  },
+  hintFeedbackContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 15,
+  },
+  hintFeedbackButton: {
+    backgroundColor: 'rgba(0, 255, 0, 0.2)',
+    padding: 8,
+    borderRadius: 5,
+    width: '48%',
+    alignItems: 'center',
+  },
+  hintFeedbackButtonNegative: {
+    backgroundColor: 'rgba(255, 69, 0, 0.2)',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  hintFeedbackText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+  },
+  answerButtonsContainer: {
+    marginTop: 10,
+  },
+  answerButton: {
+    backgroundColor: 'rgba(0, 150, 255, 0.3)',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  answerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
   },
   skipButton: {
     alignSelf: 'center',
@@ -357,8 +416,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   noMoreCardsContainer: {
-    width: SCREEN_WIDTH * 0.9,
-    height: 400,
+    width: '100%',
     borderRadius: 15,
     backgroundColor: '#222222',
     justifyContent: 'center',
