@@ -20,8 +20,9 @@ const ResultScreen = ({ route, navigation }) => {
     longitudeDelta: 0.009,
   };
 
+  // Modified to navigate to LocationQuizScreen first
   const navigateToDestination = (index) => {
-    navigation.navigate('CheckpointChecker', {
+    navigation.navigate('LocationQuiz', {
       currentIndex: index,
       nextIndex: index + 1 < trip.destinations.length ? index + 1 : index,
       trip: trip
