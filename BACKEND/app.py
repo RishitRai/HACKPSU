@@ -170,7 +170,7 @@ def generate_location_hint():
             })
         
         # Check if we've reached the maximum number of accepts/rejects
-        if reject_count >= 7 or accept_count >= 7:
+        if reject_count >= 3 or accept_count >= 3:
             return jsonify({
                 "hint": {
                     "id": "final",
@@ -208,13 +208,11 @@ def generate_location_hint():
             next_hint_id = None
             if user_response == "understood":
                 next_hint_id = hint_tree["tree"][previous_hint_id]["on_understood"]
-                accept_count += 1
             elif user_response == "confused":
                 next_hint_id = hint_tree["tree"][previous_hint_id]["on_confused"]
-                reject_count += 1
             
             # If there's no next hint or we've reached the limit, return final answer
-            if next_hint_id is None or reject_count >= 7 or accept_count >= 7:
+            if next_hint_id is None or reject_count >= 3 or accept_count >= 3:
                 return jsonify({
                     "hint": {
                         "id": "final",
@@ -320,7 +318,7 @@ def generate_hint_tree_from_gemini(location_name):
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.2,
-                max_output_tokens=1024,
+                max_output_tokens=1000,
             )
         )
         

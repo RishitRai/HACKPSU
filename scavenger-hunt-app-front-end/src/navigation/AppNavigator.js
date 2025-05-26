@@ -13,6 +13,7 @@ import RouteDetailScreen from '../screens/RouteDetailScreen';
 import ResultScreen  from '../screens/ResultScreen';
 import Leaderboard from '../screens/Leaderboard';
 import PreferenceResult from '../screens/PreferenceResult';
+import ProfileScren from '../screens/ProfileScreen';
 import LocationQuizScreen from '../screens/LocationQuizScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -80,6 +81,7 @@ const AppNavigator = () => {
       <Stack.Screen name="CheckpointChecker" component={CheckpointChecker} />
       <Stack.Screen name="LocationQuiz" component={LocationQuizScreen} />
       <Stack.Screen name="Result" component={ResultScreen} />
+      <Stack.Screen name="Profile" component={ProfileScren} />
     </Stack.Navigator>
   );
 };

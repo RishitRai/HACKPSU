@@ -31,8 +31,8 @@ const LocationQuizScreen = ({ route, navigation }) => {
   const [currentHintId, setCurrentHintId] = useState(null);
   const [isHintFinal, setIsHintFinal] = useState(false);
   const [loadingHints, setLoadingHints] = useState(true);
-  const [rejectCount, setRejectCount] = useState(0);
-  const [acceptCount, setAcceptCount] = useState(0);
+  const [rejectCount, setRejectCount] = useState(1);
+  const [acceptCount, setAcceptCount] = useState(1);
   
   // Generate quiz questions and fetch first hint
   useEffect(() => {
@@ -112,20 +112,12 @@ const LocationQuizScreen = ({ route, navigation }) => {
     
     const userResponse = understood ? "understood" : "confused";
     
-    // Increment counters separately from the API call
-    if (understood) {
-      // Check if we're already at the limit
-      if (acceptCount < 7) {
-        setAcceptCount(prev1 => prev1 + 1);
-      }
-    } else {
-      // Check if we're already at the limit
-      if (rejectCount < 7) {
-        setRejectCount(prev => prev + 1);
-      }
-    }
-    
-    fetchNextHint(userResponse);
+    const updatedAccept = understood && acceptCount < 3 ? acceptCount + 1 : acceptCount;
+    const updatedReject = !understood && rejectCount < 3 ? rejectCount + 1 : rejectCount;
+
+    setAcceptCount(updatedAccept);
+    setRejectCount(updatedReject);
+    fetchNextHint(userResponse, updatedAccept, updatedReject);
   };
 
   // Handle answer selection
@@ -170,7 +162,7 @@ const LocationQuizScreen = ({ route, navigation }) => {
                 {!isHintFinal && (
                   <View style={styles.hintStats}>
                     <Text style={styles.hintStatsText}>
-                      Helps: {acceptCount}/7 | Skip: {rejectCount}/7
+                      Helps: {acceptCount}/3 | Skip: {rejectCount}/3
                     </Text>
                   </View>
                 )}
@@ -179,10 +171,10 @@ const LocationQuizScreen = ({ route, navigation }) => {
                     <TouchableOpacity 
                       style={[
                         styles.hintFeedbackButton,
-                        acceptCount >= 7 && styles.disabledButton
+                        acceptCount >= 3 && styles.disabledButton
                       ]}
                       onPress={() => handleHintFeedback(true)}
-                      disabled={acceptCount >= 7}
+                      disabled={acceptCount >= 3}
                     >
                       <Text style={styles.hintFeedbackText}>I understand this hint</Text>
                     </TouchableOpacity>
@@ -190,10 +182,10 @@ const LocationQuizScreen = ({ route, navigation }) => {
                       style={[
                         styles.hintFeedbackButton, 
                         styles.hintFeedbackButtonNegative,
-                        rejectCount >= 7 && styles.disabledButton
+                        rejectCount >= 3 && styles.disabledButton
                       ]}
                       onPress={() => handleHintFeedback(false)}
-                      disabled={rejectCount >= 7}
+                      disabled={rejectCount >= 3}
                     >
                       <Text style={styles.hintFeedbackText}>I need more help</Text>
                     </TouchableOpacity>
