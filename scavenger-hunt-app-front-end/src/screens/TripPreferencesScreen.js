@@ -170,10 +170,10 @@ const TripPreferencesScreen = () => {
       >
         <Text style={[styles.header, { color: colors.text }]}>Plan Your Perfect Trip</Text>
 
-        <Text style={[styles.label, { color: colors.text }]}>address</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Address</Text>
         <TextInput
           mode="outlined"
-          placeholder="Search for address..."
+          placeholder="Search for Address..."
           value={address}
           onChangeText={setaddress}
           textColor={colors.text}
@@ -245,7 +245,8 @@ const TripPreferencesScreen = () => {
 
         <Divider style={styles.divider} />
 
-        <Text style={styles.label}>Choose a Theme</Text>
+        <Text style={[styles.label, styles.themeHeading]}>Themes</Text>
+
         <View style={styles.themeContainer}>
           {THEME_OPTIONS.map(({ name, value }, idx) => {
             const isSelected = keyword.includes(value);
@@ -256,12 +257,15 @@ const TripPreferencesScreen = () => {
                 style={[
                   styles.themeButton,
                   {
-                    borderWidth: isSelected ? 3 : 0,
-                    borderColor: isSelected ? '#ffffff' : 'transparent',
+                    backgroundColor: isSelected ? '#39FF14' : '#444', // neon green if selected
+                    borderColor: isSelected ? '#39FF14' : 'transparent',
+                    borderWidth: 2,
                   },
-                ]}
+                  ]}
+
               >
-                <Text style={styles.themeName}>{name}</Text>
+                <Text style={[styles.themeName, { color: isSelected ? '#000' : '#fff' }]}>{name} </Text>
+
               </TouchableOpacity>
             );
           })}
@@ -296,14 +300,14 @@ const TripPreferencesScreen = () => {
         </View>
 
         <Button
-          mode="contained"
-          onPress={handleSavePreferences} 
-          style={styles.submitButton}
-          labelStyle={{ fontWeight: '600' }}
-          buttonColor={colors.primary}
+        mode="contained"
+        onPress={handleSavePreferences}
+        style={[styles.submitButton, { backgroundColor: '#39FF14' }]}
+        labelStyle={{ fontWeight: '600', color: '#000' }}
         >
-          Save Preferences
+        Save Preferences
         </Button>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -328,15 +332,23 @@ const styles = StyleSheet.create({
   stepperControls: { flexDirection: 'row', alignItems: 'center' },
   stepperButton: { marginHorizontal: 0 },
   stepperValue: { fontSize: 18, marginHorizontal: 8, width: 40, textAlign: 'center' },
+  themeHeading: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  marginBottom: 10,
+  color: 'white',
+},
   themeContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   themeButton: {
-    width: '30%',
-    aspectRatio: 3.5,
-    borderRadius: 50,
-    marginBottom: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  width: '30%',
+  aspectRatio: 3.5,
+  borderRadius: 50,
+  marginBottom: 10,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: '#444', // default dark
+},
+
   themeName: { color: '#fff', fontWeight: '600' },
   modes: {
     flexDirection: 'row',
