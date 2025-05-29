@@ -127,23 +127,47 @@ const LocationQuizScreen = ({ route, navigation }) => {
   };
 
  const handleSwipe = (understood) => {
-  Animated.timing(position, {
-    toValue: { x: understood ? -SCREEN_WIDTH : SCREEN_WIDTH, y: 0 },
-    duration: 250,
-    useNativeDriver: false,
-  }).start(() => {
-    position.setValue({ x: 0, y: 0 });
+  if (isHintFinal && understood) {
+    // If the hint is final and the user understood, go to the next question
+    Animated.timing(position, {
+      toValue: { x: -SCREEN_WIDTH, y: 0 },
+      duration: 250,
+      useNativeDriver: false,
+    }).start(() => {
+      position.setValue({ x: 0, y: 0 });
+      setIsHintFinal(false);
+      setRejectCount(1);
+      setAcceptCount(1);
+      setCurrentHint("");
+      setCurrentHintId(null);
 
-    const userResponse = understood ? "understood" : "confused";
-    const updatedAccept = understood && acceptCount < 3 ? acceptCount + 1 : acceptCount;
-    const updatedReject = !understood && rejectCount < 3 ? rejectCount + 1 : rejectCount;
+      if (currentCardIndex < quizData.length - 1) {
+        setCurrentCardIndex(currentCardIndex + 1);
+        fetchNextHint(null, acceptCount, rejectCount);
+      } else {
+        setQuizCompleted(true);
+      }
+    });
+  } else {
+    Animated.timing(position, {
+      toValue: { x: understood ? -SCREEN_WIDTH : SCREEN_WIDTH, y: 0 },
+      duration: 250,
+      useNativeDriver: false,
+    }).start(() => {
+      position.setValue({ x: 0, y: 0 });
 
-    setAcceptCount(updatedAccept);
-    setRejectCount(updatedReject);
+      const userResponse = understood ? "understood" : "confused";
+      const updatedAccept = understood && acceptCount < 3 ? acceptCount + 1 : acceptCount;
+      const updatedReject = !understood && rejectCount < 3 ? rejectCount + 1 : rejectCount;
 
-    fetchNextHint(userResponse, updatedAccept, updatedReject);
-  });
+      setAcceptCount(updatedAccept);
+      setRejectCount(updatedReject);
+
+      fetchNextHint(userResponse, updatedAccept, updatedReject);
+    });
+  }
 };
+
 
 
   const handleAnswerSelection = (option) => {
@@ -160,75 +184,70 @@ const LocationQuizScreen = ({ route, navigation }) => {
   };
 
   const renderCurrentQuestion = () => {
-    if (currentCardIndex >= quizData.length) {
-      return renderNoMoreCards();
-    }
+  if (currentCardIndex >= quizData.length) {
+    return renderNoMoreCards();
+  }
 
-    const item = quizData[currentCardIndex];
+  const item = quizData[currentCardIndex];
 
-    return (
-      <Animated.View
-  {...panResponder.panHandlers}
-  style={[
-    styles.cardStyle,
-    {
-      transform: [
-        { translateX: position.x },
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.cardStyle,
         {
-          rotate: position.x.interpolate({
-            inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-            outputRange: ['-10deg', '0deg', '10deg'],
-          }),
+          transform: [
+            { translateX: position.x },
+            {
+              rotate: position.x.interpolate({
+                inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+                outputRange: ['-10deg', '0deg', '10deg'],
+              }),
+            },
+          ],
         },
-      ],
-    },
-  ]}
->
-  <View style={styles.cardContent}>
-    <Text style={styles.questionText}>{item.question}</Text>
-
-    {/* Hint Section */}
-    <View style={styles.hintContainer}>
-      <Text style={styles.hintTitle}>Hint:</Text>
-      {loadingHints ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#00FF00" />
-          <Text style={styles.loadingText}>Generating hint...</Text>
+      ]}
+    >
+      <View style={styles.cardContent}>
+        <View style={styles.cardTopRow}>
+          <Text style={styles.sideLabel}>← Need Help</Text>
+          <Text style={styles.questionCounter}>
+            Question {currentCardIndex + 1}/{quizData.length}
+          </Text>
+          <Text style={styles.sideLabel}>Understood →</Text>
         </View>
-      ) : (
-        <>
-          <Text style={styles.hintText}>{currentHint}</Text>
-          {!isHintFinal && (
-            <View style={styles.hintStats}>
-              <Text style={styles.hintStatsText}>
-                Helps: {acceptCount}/3 | Skip: {rejectCount}/3
-              </Text>
-              <Text style={styles.swipeInstructions}>
-                Swipe left if you understand, right if you need more help.
-              </Text>
+
+        <Text style={styles.questionText}>{item.question}</Text>
+
+        {/* Hint Section */}
+        <View style={styles.hintContainer}>
+          <Text style={styles.hintTitle}>Helpful Hint:</Text>
+          {loadingHints ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#00FF00" />
+              <Text style={styles.loadingText}>Generating hint...</Text>
             </View>
+          ) : (
+            <Text style={styles.hintText}>{currentHint}</Text>
           )}
-        </>
-      )}
-    </View>
+        </View>
 
-    {/* Answer Options */}
-    <View style={styles.answerButtonsContainer}>
-      {item.options.map((option, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.answerButton}
-          onPress={() => handleAnswerSelection(option)}
-        >
-          <Text style={styles.answerButtonText}>{option.text}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  </View>
-</Animated.View>
-
-    );
-  };
+        {/* Answer Options */}
+        <View style={styles.answerButtonsContainer}>
+          {item.options.map((option, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.answerButton}
+              onPress={() => handleAnswerSelection(option)}
+            >
+              <Text style={styles.answerButtonText}>{option.text}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
 
   const renderNoMoreCards = () => (
     <View style={styles.noMoreCardsContainer}>
@@ -278,10 +297,6 @@ const LocationQuizScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Quiz: Guess the Location</Text>
-        <Text style={styles.subHeaderText}>{`Question ${currentCardIndex + 1} of ${quizData.length}`}</Text>
-      </View>
       <View style={styles.cardContainer}>{renderCurrentQuestion()}</View>
       <TouchableOpacity style={styles.skipButton} onPress={() => setQuizCompleted(true)}>
         <Text style={styles.skipButtonText}>Skip Quiz</Text>
@@ -316,36 +331,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   cardStyle: {
-    width: '100%',
-    borderRadius: 15,
-    backgroundColor: '#222222',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-  },
-  cardContent: {
-    padding: 20,
-  },
+  flex: 1, // make it full height
+  width: '100%',
+  borderRadius: 0,
+  backgroundColor: '#222222',
+  elevation: 5,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 2,
+},
+cardTopRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 20,
+},
+
+
+sideLabel: {
+  color: '#AAAAAA',
+  fontSize: 12,
+},
+cardContent: {
+  padding: 24,
+  justifyContent: 'center',
+},
   questionText: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  hintContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  hintTitle: {
-    color: '#00FF00',
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
+  fontSize: 24,
+  fontWeight: 'bold',
+  color: '#FFFFFF',
+  textAlign: 'center',
+  marginBottom: 16,
+  marginTop: 10,
+},
+  questionCounter: {
+  color: '#00FF00',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
+hintContainer: {
+  backgroundColor: '#2e4e2e',
+  padding: 16,
+  borderRadius: 12,
+  marginBottom: 25,
+  shadowColor: '#00FF00',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 4,
+},
+  
+hintTitle: {
+  color: '#00FF00',
+  fontWeight: 'bold',
+  fontSize: 16,
+  marginBottom: 5,
+},
   hintText: {
     color: '#DDDDDD',
   },
@@ -393,17 +435,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   answerButton: {
-    backgroundColor: 'rgba(0, 150, 255, 0.3)',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  answerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
+  backgroundColor: '#1e3a8a', // Dark blue tone
+  padding: 16,
+  borderRadius: 12,
+  marginBottom: 14,
+  alignItems: 'center',
+  elevation: 2,
+},
+answerButtonText: {
+  color: '#FFFFFF',
+  fontSize: 18,
+  fontWeight: '700',
+},
   skipButton: {
     alignSelf: 'center',
     padding: 15,
