@@ -55,7 +55,7 @@ const TripPreferencesScreen = () => {
 
   const sendPostRequest = async (parameters) => {
     console.log('Sending parameters to backend:', parameters);
-    const response = await axios.post('http://100.64.14.73:5000/optimize_route', parameters, { timeout: 60000 });
+    const response = await axios.post('http://192.168.0.170:5000/optimize_route', parameters, { timeout: 60000 });
   
     if (response && response.data && response.data.routes) {
       // console.log('Response from backend:', response.data.routes);
@@ -71,7 +71,7 @@ const TripPreferencesScreen = () => {
   const fetchDataFromDatabase = async (parameters) => {
     try {
       const response = await axios.post(
-        'http://100.64.14.73:5000/get_data_from_parameters',
+        'http://192.168.70.128:5000/get_data_from_parameters',
         parameters,
         { timeout: 60000 } // Set timeout for the request
       );

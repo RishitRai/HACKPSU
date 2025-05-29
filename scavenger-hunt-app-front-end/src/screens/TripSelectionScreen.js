@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, FlatList, SafeAreaView } from 'react-native';
-import { useTheme, Card, Title, Paragraph, Button } from 'react-native-paper';
+import { View, StyleSheet, ActivityIndicator, FlatList, SafeAreaView, Text } from 'react-native';
+import { useTheme, Card, Title, Button } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 
@@ -17,8 +17,7 @@ const TripSelectionScreen = () => {
   useEffect(() => {
     const fetchRoutes = async () => {
       try {
-        const response = await axios.get('http://100.64.14.73:5000/get_outputs');
-        //const response = await axios.get('http://104.39.111.125:5000/get_outputs');
+        const response = await axios.get('http://192.168.0.170:5000/get_outputs');
         const data = response.data.outputs;
 
         const getFirstValidImage = (route) => {
@@ -27,24 +26,16 @@ const TripSelectionScreen = () => {
               return { uri: routeImage["Image URL"] };
             }
           }
-
           return require('../assets/placeholder.jpg');
         };
 
         const locationCounter = (route) => {
-          let locationCount = 0;
-          for (const routeLoc of route.Route) {
-            if (routeLoc["Name"]) {
-              locationCount++;
-            }
-          }
-
-          return locationCount;
+          return route.Route.filter((r) => r["Name"]).length;
         };
 
         const formattedRoutes = data.flatMap((cluster) =>
           cluster.routes.map((route) => ({
-            id: `${cluster._id}-${route["Cluster ID"]}`, // Unique ID for each route
+            id: `${cluster._id}-${route["Cluster ID"]}`,
             name: route["Cluster Name"] || "Unnamed Cluster",
             description: route["Cluster Description"] || "No Description Available",
             estimatedTime: route["Estimated Travel Time (min)"] || "N/A",
@@ -58,13 +49,14 @@ const TripSelectionScreen = () => {
               lat: parseFloat(entry.Destination?.split(",")[0]),
               lng: parseFloat(entry.Destination?.split(",")[1]),
             })),
-            locationCount: locationCounter(route), // Count of locations in the route
-            image: getFirstValidImage(route), // Use the function to get the first valid image for this route
+            locationCount: locationCounter(route),
+            image: getFirstValidImage(route),
           }))
         );
 
         setRoutes(formattedRoutes);
       } catch (error) {
+        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -73,28 +65,33 @@ const TripSelectionScreen = () => {
     fetchRoutes();
   }, []);
 
-  const renderRouteCard = ({ item }) => (
+    const renderRouteCard = ({ item }) => (
     <Card style={[styles.card, { backgroundColor: colors.surface }]}>
       <Card.Cover source={item.image} style={styles.cardImage} />
       <Card.Content>
         <Title style={[styles.title, { color: colors.text }]}>{item.name}</Title>
-        <Paragraph style={{ color: colors.text }}>Number of Locations: {item.locationCount}</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Estimated Time: {item.estimatedTime} min</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Estimated Distance: {item.estimatedDistance} km</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Ratings: {item.ratings}</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Popularity: {item.popularity}</Paragraph>
+        <Text style={styles.infoText}>📍 Locations: {item.locationCount}</Text>
+        <Text style={styles.infoText}>⏱ Time: {item.estimatedTime} min</Text>
+        <Text style={styles.infoText}>📏 Distance: {item.estimatedDistance} km</Text>
+        <Text style={styles.infoText}>⭐ Rating: {item.ratings}</Text>
+        <Text style={styles.infoText}>🔥 Popularity: {item.popularity}</Text>
       </Card.Content>
-      <Card.Actions>
-        <Button mode="contained" onPress={() => openResultScreen(item)} style={styles.button}>
-          Start
-        </Button>
-      </Card.Actions>
+      <View style={styles.cardFooter}>
+      <Button
+        mode="contained"
+        onPress={() => openResultScreen(item)}
+        style={styles.button}
+        labelStyle={styles.buttontext}
+      >
+        Start
+      </Button>
+      </View>
     </Card>
-  );
+);
+
 
   if (loading) {
     return (
-      
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6200ee" />
       </SafeAreaView>
@@ -104,10 +101,10 @@ const TripSelectionScreen = () => {
   return (
     <SafeAreaView style={styles.loadingContainer}>
       <FlatList
-        data={routes} // Pass the processed routes to FlatList
-        keyExtractor={(item) => item.id} // Ensure each route has a unique key
+        data={routes}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.container}
-        renderItem={renderRouteCard} // Render each route using the reusable function
+        renderItem={renderRouteCard}
       />
     </SafeAreaView>
   );
@@ -116,11 +113,8 @@ const TripSelectionScreen = () => {
 export default TripSelectionScreen;
 
 const styles = StyleSheet.create({
-  image: {
-    padding:0,
-  },
   container: {
-    padding: 20
+    padding: 10,
   },
   loadingContainer: {
     flex: 1,
@@ -129,30 +123,52 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 20,
-    borderRadius: 10,
+    borderRadius: 0, // Remove rounded corners
+    width: 330,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 3,
   },
   cardImage: {
     width: '100%',
-    resizeMode: 'cover',
-    margin: 0,
-    padding: 0
+    height: 200,
+    borderRadius: 0, // Rectangular image
   },
-  description: {
-    fontSize: 14,
-    marginBottom: 10,
-  },
+  cardFooter: {
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+  paddingHorizontal: 16,
+  paddingBottom: 12,
+  marginTop: 8,
+},
+
+button: {
+  backgroundColor: '#00FF00',
+  paddingHorizontal: 5,
+  paddingVertical: -5,
+  borderRadius: 8,
+  minWidth: 70,
+  elevation: 2,
+},
+
+buttontext: {
+  fontSize: 13,
+  color: '#000',
+  fontWeight: 'bold',
+},
+
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#FFFFFF', // Change this to your preferred color
   },
-  button: {
-    marginLeft: 'auto',
-    borderRadius: 15,
-    buttonColor: '#00FF00', // Change this to your preferred color
-    textColor: "#000"
+  infoText: {
+    fontSize: 14,
+    marginVertical: 2,
+    color: '#fff',
   },
+  actions: {
+    justifyContent: 'flex-end',
+    paddingRight: 16,
+    paddingBottom: 10,
+  }
 });
