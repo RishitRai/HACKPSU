@@ -1,8 +1,10 @@
+// Corrected
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, FlatList, SafeAreaView, Text } from 'react-native';
-import { useTheme, Card, Title, Button } from 'react-native-paper';
+import { useTheme, Card, Button } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const TripSelectionScreen = () => {
   const { colors } = useTheme();
@@ -17,7 +19,7 @@ const TripSelectionScreen = () => {
   useEffect(() => {
     const fetchRoutes = async () => {
       try {
-        const response = await axios.get('http://192.168.0.170:5000/get_outputs');
+        const response = await axios.get('http://100.64.14.73:5000/get_outputs');
         const data = response.data.outputs;
 
         const getFirstValidImage = (route) => {
@@ -65,30 +67,66 @@ const TripSelectionScreen = () => {
     fetchRoutes();
   }, []);
 
-    const renderRouteCard = ({ item }) => (
+  const renderRouteCard = ({ item }) => (
     <Card style={[styles.card, { backgroundColor: colors.surface }]}>
       <Card.Cover source={item.image} style={styles.cardImage} />
-      <Card.Content>
-        <Title style={[styles.title, { color: colors.text }]}>{item.name}</Title>
-        <Text style={styles.infoText}>📍 Locations: {item.locationCount}</Text>
-        <Text style={styles.infoText}>⏱ Time: {item.estimatedTime} min</Text>
-        <Text style={styles.infoText}>📏 Distance: {item.estimatedDistance} km</Text>
-        <Text style={styles.infoText}>⭐ Rating: {item.ratings}</Text>
-        <Text style={styles.infoText}>🔥 Popularity: {item.popularity}</Text>
+      <Card.Content style={styles.cardContent}>
+        <View style={styles.titleSection}>
+          <Text style={[styles.title, { color: colors.text }]}>{item.name}</Text>
+          <View style={styles.ratingBadge}>
+            <Text style={styles.ratingText}>★ {item.ratings}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.statsContainer}>
+          <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="place" size={18} color="#00FF00" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.locationCount}</Text>
+              </View>
+              <Text style={styles.statLabel}>Locations</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="access-time" size={18} color="#FFD700" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.estimatedTime}</Text>
+              </View>
+              <Text style={styles.statLabel}>Minutes</Text>
+            </View>
+          </View>
+          
+          <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="straighten" size={18} color="#FF6B6B" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.estimatedDistance}</Text>
+              </View>
+              <Text style={styles.statLabel}>Kilometers</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="trending-up" size={18} color="#4ECDC4" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.popularity}</Text>
+              </View>
+              <Text style={styles.statLabel}>Popularity</Text>
+            </View>
+          </View>
+        </View>
       </Card.Content>
+      
       <View style={styles.cardFooter}>
-      <Button
-        mode="contained"
-        onPress={() => openResultScreen(item)}
-        style={styles.button}
-        labelStyle={styles.buttontext}
-      >
-        Start
-      </Button>
+        <Button
+          mode="contained"
+          onPress={() => openResultScreen(item)}
+          style={styles.button}
+          labelStyle={styles.buttontext}
+        >
+          Start
+        </Button>
       </View>
     </Card>
-);
-
+  );
 
   if (loading) {
     return (
@@ -122,53 +160,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   card: {
-    marginBottom: 20,
-    borderRadius: 0, // Remove rounded corners
-    width: 330,
+    marginBottom: 40,
+    paddingBottom:20,
+    borderRadius: 0,
+    width: 380,
     overflow: 'hidden',
     elevation: 3,
   },
   cardImage: {
     width: '100%',
     height: 200,
-    borderRadius: 0, // Rectangular image
+    borderRadius: 0,
+    marginBottom: 15
   },
-  cardFooter: {
-  flexDirection: 'row',
-  justifyContent: 'flex-end',
-  paddingHorizontal: 16,
-  paddingBottom: 12,
-  marginTop: 8,
-},
-
-button: {
-  backgroundColor: '#00FF00',
-  paddingHorizontal: 5,
-  paddingVertical: -5,
-  borderRadius: 8,
-  minWidth: 70,
-  elevation: 2,
-},
-
-buttontext: {
-  fontSize: 13,
-  color: '#000',
-  fontWeight: 'bold',
-},
-
+  cardContent: {
+    paddingTop: 16,
+    paddingBottom: 30,
+    paddingHorizontal: 16,
+  },
+  titleSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 20,
+    lineHeight: 34,
   },
-  infoText: {
-    fontSize: 14,
-    marginVertical: 2,
+  ratingBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  statsContainer: {
+    gap: 12,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  statWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  statIcon: {
+    marginRight: 6,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#fff',
   },
-  actions: {
+  statLabel: {
+    fontSize: 10,
+    color: '#bbb',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  popularityContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  popularityBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  popularityFill: {
+    height: '100%',
+    backgroundColor: '#00FF00',
+    borderRadius: 2,
+  },
+  cardFooter: {
+    flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingRight: 16,
-    paddingBottom: 10,
-  }
+    paddingHorizontal: 15,
+    paddingBottom: 12,
+    marginTop: 8,
+  },
+  button: {
+    backgroundColor: '#00FF00',
+    paddingHorizontal: 10,
+    paddingVertical: 0,
+    borderRadius: 8,
+    minWidth: 70,
+    elevation: 2,
+  },
+  buttontext: {
+    fontSize: 13,
+    color: '#000',
+    fontWeight: 'bold',
+  },
 });

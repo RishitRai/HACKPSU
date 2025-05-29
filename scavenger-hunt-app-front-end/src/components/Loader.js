@@ -16,4 +16,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Loader;  // ✅ Ensure this is a default export
+export default Loader;

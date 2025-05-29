@@ -43,7 +43,7 @@ const NavigationScreen = ({ route, navigation }) => {
   const checkLocation = async () => {
     setCheckingLocation(true);
     try {
-      const response = await axios.post('http://192.168.0.170:5000/check_user_location', {
+      const response = await axios.post('http://100.64.14.73:5000/check_user_location', {
         target_lat: nextDestination.lat,
         target_lon: nextDestination.lng,
         tolerance: 0.01
@@ -121,7 +121,7 @@ const NavigationScreen = ({ route, navigation }) => {
       });
 
       // Send to backend for landmark-only verification
-      const response = await axios.post('http://192.168.0.170:5000/verify_location_image', {
+      const response = await axios.post('http://100.64.14.73:5000/verify_location_image', {
         image: base64Image,
         location_name: nextDestination.name,
         location_lat: nextDestination.lat,

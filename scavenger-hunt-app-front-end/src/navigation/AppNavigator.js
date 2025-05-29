@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { FAB } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -92,7 +91,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 80,
-    alignSelf: 'center',
-    backgroundColor: '#ff3b30',
+    alignSelf: 'center'
   },
 });

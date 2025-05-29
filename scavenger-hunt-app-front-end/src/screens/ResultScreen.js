@@ -1,7 +1,9 @@
+// Corrected
 import React from 'react';
 import { View, Text, StyleSheet, Image, SafeAreaView, Dimensions, Linking, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const ResultScreen = ({ route, navigation }) => {
   const { colors } = useTheme();
@@ -16,11 +18,10 @@ const ResultScreen = ({ route, navigation }) => {
   const initialRegion = {
     latitude: coordinates[0]?.latitude || 37.7749,
     longitude: coordinates[0]?.longitude || -122.4194,
-    latitudeDelta: 0.009, // Zoom level
+    latitudeDelta: 0.009,
     longitudeDelta: 0.009,
   };
 
-  // Modified to navigate to LocationQuizScreen first
   const navigateToDestination = (index) => {
     navigation.navigate('LocationQuiz', {
       currentIndex: index,
@@ -32,73 +33,105 @@ const ResultScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Image source={trip.image} style={styles.image} />
-        <Text style={[styles.title, { color: colors.text }]}>{trip.name}</Text>
-        <Text style={{ color: colors.text }}>Description: {trip.description}</Text>
-        <Text style={[styles.info, { color: colors.text }]}>Duration: {trip.estimatedTime} min</Text>
-        <Text style={[styles.info, { color: colors.text }]}>Estimated Distance: {trip.estimatedDistance} km</Text>
-        <Text style={{ color: colors.text }}>Ratings: {trip.ratings}</Text>
-        <Text style={{ color: colors.text }}>Popularity: {trip.popularity}</Text>
-
-        <Text style={[styles.header, { color: colors.text }]}>Journey for {trip.name}</Text>
-
-        {trip.destinations.map((destination, index) => (
-          <View key={index} style={styles.stepContainer}>
-            <View style={styles.lining}>
-              <View style={styles.circle}>
-                <Text style={styles.circleText}>{index + 1}</Text>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <Image source={trip.image} style={styles.image} />
+          <View style={styles.overlayContent}>
+            <View style={styles.titleSection}>
+              <Text style={[styles.title, { color: colors.text }]}>{trip.name}</Text>
+              <View style={styles.ratingBadge}>
+                <Text style={styles.ratingText}>★ {trip.ratings}</Text>
               </View>
-
-              {index < trip.destinations.length - 1 && (
-                <View style={styles.lineContainer}>
-                  <View style={styles.line} />
-                </View>
-              )}
-            </View>
-            
-            <View style={styles.stepDetails}>
-              <View>
-                <Text style={[styles.location, { color: colors.text }]}>{destination.name}</Text>
-                <Text style={[styles.transport, { color: colors.text }]}>
-                  Mode: {destination.modeOfTransport}
-                </Text>
-              </View>
-              
-              {/* Navigation Button */}
-              <TouchableOpacity 
-                style={styles.navButton}
-                onPress={() => navigateToDestination(index)}
-              >
-                <Text style={styles.navButtonText}>Navigate</Text>
-              </TouchableOpacity>
             </View>
           </View>
-        ))}
+        </View>
+
+        {/* Minimalistic Stats Section */}
+        <View style={styles.statsSection}>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{trip.estimatedTime}m</Text>
+              <Text style={styles.statLabel}>Duration</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{trip.estimatedDistance}km</Text>
+              <Text style={styles.statLabel}>Distance</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{trip.destinations.length}</Text>
+              <Text style={styles.statLabel}>Stops</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>★ {trip.ratings}</Text>
+              <Text style={styles.statLabel}>Rating</Text>
+            </View>
+          </View>
+          
+          <Text style={[styles.description, { color: colors.text }]}>{trip.description}</Text>
+        </View>
+
+        {/* Minimalistic Journey Section */}
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>Journey</Text>
+        
+        <View style={styles.journeyContainer}>
+          {trip.destinations.map((destination, index) => (
+            <View key={index} style={styles.stepContainer}>
+              {/* Simple step indicator */}
+              <View style={styles.stepIndicator}>
+                <View style={styles.stepDot} />
+                {index < trip.destinations.length - 1 && <View style={styles.stepLine} />}
+              </View>
+              
+              {/* Destination content */}
+              <View style={styles.stepContent}>
+                <View style={styles.destinationRow}>
+                  <View style={styles.destinationInfo}>
+                    <Text style={[styles.locationName, { color: colors.text }]}>
+                      {destination.name}
+                    </Text>
+                    <Text style={styles.transportMode}>
+                      {destination.modeOfTransport}
+                    </Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.navButton}
+                    onPress={() => navigateToDestination(index)}
+                  >
+                    <Icon name="navigation" size={16} color="#000" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
 
         {/* Map Section */}
-        <Text style={[styles.header, { color: colors.text }]}>Map of Journey</Text>
-        <MapView
-          style={styles.map}
-          initialRegion={initialRegion}
-        >
-          {coordinates.map((location, index) => (
-            <Marker
-              key={index}
-              coordinate={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }}
-              title={location.name}
-            />
-          ))}
-        </MapView>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>Map</Text>
+        <View style={styles.mapContainer}>
+          <MapView
+            style={styles.map}
+            initialRegion={initialRegion}
+          >
+            {coordinates.map((location, index) => (
+              <Marker
+                key={index}
+                coordinate={{
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                }}
+                title={location.name}
+              />
+            ))}
+          </MapView>
+        </View>
 
         {/* Start Journey Button */}
         <Button 
           mode="contained" 
           style={styles.startButton}
           onPress={() => navigateToDestination(0)}
-          textColor='black'
+          labelStyle={styles.startButtonText}
         >
           Start Journey
         </Button>
@@ -116,120 +149,169 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    padding: 20,
     paddingBottom: 40,
+  },
+  heroSection: {
+    position: 'relative',
+    marginBottom: 20,
   },
   image: {
     width: '100%',
     height: 220,
-    borderRadius: 12,
-    marginBottom: 20,
+    borderRadius: 0,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 10,
+  overlayContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  info: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  details: {
-    fontSize: 14,
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  header: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 24,
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  stepContainer: {
-  flexDirection: 'row',
-  alignItems: 'flex-start',
-  marginBottom: 24,
-  width: '100%',
-  padding: 12,
-  borderRadius: 12,
-  backgroundColor: '#1e1e1e',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.3,
-  shadowRadius: 4,
-  elevation: 5,
-},
-  stepDetails: {
-  flex: 1,
-  flexDirection: 'column',
-  marginLeft: 16,
-},
-  lining: {
-    flexDirection: 'column',
+  titleSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  circle: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  backgroundColor: '#00FF00',
-  justifyContent: 'center',
-  alignItems: 'center',
-  shadowColor: '#00FF00',
-  shadowOffset: { width: 0, height: 0 },
-  shadowOpacity: 0.5,
-  shadowRadius: 6,
-},
-  circleText: {
-  color: '#000000',
-  fontWeight: 'bold',
-  fontSize: 16,
-},
-  location: {
-  fontSize: 17,
-  fontWeight: '600',
-  marginBottom: 4,
-},
-  transport: {
-  fontSize: 14,
-  color: '#BBBBBB',
-  marginBottom: 8,
-},
-  lineContainer: {
-    width: 2,
-    height: 40,
-    alignSelf: 'center',
-  },
-  line: {
+  title: {
+    fontSize: 34,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 34,
     flex: 1,
-    width: 2,
-    backgroundColor: '#00FF00',
+    marginRight: 12,
   },
-  map: {
-    width: Dimensions.get('window').width * 0.9,
-    height: 300,
+  ratingBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 12,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  statsSection: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#aaa',
+    marginTop: 16,
+    textAlign: 'left',
+  },
+  
+  // Minimalistic Stats Styles
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#222',
+  },
+  statCard: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '500',
+  },
+  sectionHeader: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 30,
     marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  
+  // Minimalistic Journey Styles
+  journeyContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  stepContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  stepIndicator: {
+    alignItems: 'center',
+    marginRight: 16,
+    paddingTop: 2,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00FF00',
+    marginBottom: 8,
+  },
+  stepLine: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#333',
+  },
+  stepContent: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  destinationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  destinationInfo: {
+    flex: 1,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  transportMode: {
+    fontSize: 13,
+    color: '#888',
   },
   navButton: {
-  backgroundColor: '#00FF00',
-  paddingHorizontal: 20,
-  paddingVertical: 6,
-  borderRadius: 50,
-  alignSelf: 'flex-start',
-  marginTop: 4,
-},
-  navButtonText: {
-  color: '#000000',
-  fontWeight: 'bold',
-  fontSize: 14,
-},
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00FF00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  mapContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  map: {
+    width: '100%',
+    height: 300,
+    borderRadius: 12,
+  },
   startButton: {
     backgroundColor: '#00FF00',
-    width: '100%',
+    marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 8,
+    elevation: 2,
+  },
+  startButtonText: {
+    fontSize: 13,
+    color: '#000',
+    fontWeight: 'bold',
   },
 });

@@ -17,17 +17,18 @@ gen_key = os.getenv("GEN_API")
 class_url = os.getenv("CLASS_URL")
 class_key = os.getenv("CLASS_KEY")
 search_id = os.getenv("SEARCH_ID")
+
 genai_client = genai.Client(api_key=gen_key)
 
 # Initialize Flask App
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend communication
 
-client = MongoClient("mongodb+srv://pranavattrey:Villa751@scav.htwdgsi.mongodb.net/?retryWrites=true&w=majority&appName=Scav")
-db = client['ScavApp']  # Replace with your database name
+client = MongoClient("mongodb+srv://drb6015:XlRnI99WeoVaYAyj@cluster0.2cs7k8r.mongodb.net/")
+db = client['routeOptimizer']  # Replace with your database name
 
-inputs_collection = db['Inputs']  # Collection for inputs
-outputs_collection = db['Output']  # Collection for outputs
+inputs_collection = db['inputs']  # Collection for inputs
+outputs_collection = db['outputs']  # Collection for outputs
 
 
 # Vision API configuration
@@ -428,59 +429,53 @@ def get_inputs():
 
 @app.route('/get_outputs', methods=['GET'])
 def get_outputs():
+    """
+    API Endpoint to retrieve data from the 'outputs' collection, handling nested objects and arrays.
+    """
     try:
-        outputs_data = outputs_collection.find()
+        # Query the 'outputs' collection
+        outputs_data = outputs_collection.find()  # Fetch all documents
+
+        # Process the data for readability
         outputs_list = []
-
         for output_doc in outputs_data:
-            try:
-                formatted_doc = {
-                    "_id": str(output_doc["_id"]),
-                    "input_id": str(output_doc.get("input_id", "")),
-                    "routes": []
-                }
+            formatted_doc = {
+                "_id": str(output_doc["_id"]),  # Convert MongoDB ObjectId to string
+                "input_id": str(output_doc.get("input_id", "")),  # Convert input_id if present
+                "routes": [
+                    {
+                        "Cluster Description": route.get("Cluster Description", ""),
+                        "Cluster ID": route.get("Cluster ID", 0),
+                        "Cluster Name": route.get("Cluster Name", ""),
+                        "Estimated Travel Distance (km)": route.get("Estimated Travel Distance (km)", 0),
+                        "Estimated Travel Time (min)": route.get("Estimated Travel Time (min)", 0),
+                        "Ratings": route.get("Ratings", 0),
+                        "Popularity": route.get("Popularity", 0),
+                        "Route": [
+                            {
+                                "Destination": sub_route.get("Destination", ""),
+                                "Estimated Travel Distance (km)": sub_route.get("Estimated Travel Distance (km)", 0),
+                                "Estimated Travel Time (min)": sub_route.get("Estimated Travel Time (min)", 0),
+                                "Google Maps Link": sub_route.get("Google Maps Link", ""),
+                                "Image URL": sub_route.get("Image URL", None),
+                                "Mode of Transport": sub_route.get("Mode of Transport", ""),
+                                "Name": sub_route.get("Name", ""),
+                                "Origin": sub_route.get("Origin", ""),
+                            }
+                            for sub_route in route.get("Route", [])
+                        ],
+                    }
+                    for route in output_doc.get("routes", [])
+                ],
+            }
+            outputs_list.append(formatted_doc)
 
-                for route in output_doc.get("routes", []):
-                    try:
-                        formatted_doc["routes"].append({
-                            "Cluster Description": route.get("Cluster Description", ""),
-                            "Cluster ID": route.get("Cluster ID", 0),
-                            "Cluster Name": route.get("Cluster Name", ""),
-                            "Estimated Travel Distance (km)": route.get("Estimated Travel Distance (km)", 0),
-                            "Estimated Travel Time (min)": route.get("Estimated Travel Time (min)", 0),
-                            "Ratings": route.get("Ratings", 0),
-                            "Popularity": route.get("Popularity", 0),
-                            "Route": [
-                                {
-                                    "Destination": sub_route.get("Destination", ""),
-                                    "Estimated Travel Distance (km)": sub_route.get("Estimated Travel Distance (km)", 0),
-                                    "Estimated Travel Time (min)": sub_route.get("Estimated Travel Time (min)", 0),
-                                    "Google Maps Link": sub_route.get("Google Maps Link", ""),
-                                    "Image URL": sub_route.get("Image URL", None),
-                                    "Mode of Transport": sub_route.get("Mode of Transport", ""),
-                                    "Name": sub_route.get("Name", ""),
-                                    "Origin": sub_route.get("Origin", ""),
-                                }
-                                for sub_route in route.get("Route", [])
-                                if isinstance(sub_route, dict)
-                            ]
-                        })
-                    except Exception as inner_route_error:  # <-- this line was incorrect before
-                        print(f"[Error parsing route in document {output_doc['_id']}]: {inner_route_error}")
-                        continue
-
-                outputs_list.append(formatted_doc)
-            except Exception as doc_error:
-                print(f"[Error formatting document {output_doc['_id']}]: {doc_error}")
-                continue
-
+        # Return the processed data as JSON response
         return jsonify({"outputs": outputs_list}), 200
 
     except Exception as e:
-        print(f"[ERROR in get_outputs]: {str(e)}")
+        # Handle errors
         return jsonify({"error": str(e)}), 500
-
-
 
 # @app.route('/get_data_by_parameters', methods=['POST'])
 # def get_data_by_parameters():
@@ -587,13 +582,10 @@ def check_user_location():
         return jsonify({"is_at_location": is_at_location})  # Return the result to the frontend
 
     except:
-        return False  
+        return False   
 
 
 # Run Flask App
 if __name__ == "__main__":
     app.run(debug=True, host = '0.0.0.0')
     #app.run(debug=True)
-
-
-    
