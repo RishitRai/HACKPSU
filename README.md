@@ -16,7 +16,19 @@ Built during HackPSU, Voyagr aims to make exploration effortless by combining in
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native (Expo)
-- **Backend:** Flask (Python)
+- ## Backend
+
+- **Flask** – Python web framework for building REST APIs
+- **pymongo** – MongoDB Atlas (cloud database) integration
+- **faiss** – Fast clustering and similarity search for route optimization
+- **google-genai** – Google Gemini Generative AI API for naming and descriptions
+- **supabase** – Integration for additional cloud database or authentication features
+- **python-dotenv** – For loading environment variables and API keys
+- **Pillow** – Image processing (for hashing and manipulation)
+- **imagehash** – Perceptual image hashing
+- **requests** – HTTP requests to external APIs (Google Maps, Places, etc.)
+- **flask-cors** – Enable CORS for frontend-backend communication
+- **numpy** – Numerical operations for clustering and calculations
 - **Database:** MongoDB Atlas (Cloud)
 - **APIs Used:**
   - **Google Maps Geocoding API** – for converting addresses to latitude/longitude
