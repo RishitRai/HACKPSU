@@ -72,7 +72,7 @@ const LocationQuizScreen = ({ route, navigation }) => {
 
     try {
       const response = await axios.post(
-        'http://192.168.70.128:5000/generate_location_hint',
+        'http://100.64.14.73:5000/generate_location_hint',
         {
           location_name: destination.name,
           previous_hint_id: currentHintId,

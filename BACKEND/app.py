@@ -693,7 +693,7 @@ def verify_location_image_supabase():
                 print(f"[ERROR] /verify_location_image_supabase: Error comparing with hash '{sample_hash_str}': {e}")
                 continue
         
-        match_threshold = 30 
+        match_threshold = 45 
         is_match = min_distance <= match_threshold
         final_confidence = best_match_info['score'] if best_match_info else 0.0
 

@@ -136,7 +136,7 @@ const NavigationScreen = ({ route, navigation }) => {
       };
       console.log("[DEBUG] verifyPhotoLocation: Sending payload to backend:", payload.location_name, payload.location_lat, payload.location_lng);
   
-      const response = await axios.post('http://100.64.12.241:5001/verify_location_image_supabase', payload);
+      const response = await axios.post('http://100.64.14.73:5000/verify_location_image_supabase', payload);
       
       console.log("[DEBUG] verifyPhotoLocation: Received response from backend:", JSON.stringify(response.data, null, 2));
   
