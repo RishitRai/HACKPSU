@@ -15,10 +15,16 @@ Built during HackPSU, Voyagr aims to make exploration effortless by combining in
 
 ## 🛠️ Tech Stack
 
-- Frontend: React.js + Tailwind CSS
-- Backend: Flask + SQLite
-- APIs: Google Maps API, GeoLocation API
-- Other Tools: Firebase Auth (optional), LocalStorage for state management
+- **Frontend:** React Native (Expo)
+- **Backend:** Flask (Python)
+- **Database:** MongoDB Atlas (Cloud)
+- **APIs Used:**
+  - **Google Maps Geocoding API** – for converting addresses to latitude/longitude
+  - **Google Places API** – for searching nearby places by keyword/category
+  - **Google Routes API** – for route and travel time/distance calculations
+  - **Google Custom Search API** – for fetching images of places
+  - **Google Geolocation API** – for determining the user's current location
+  - **Gemini (Google Generative AI) API** – for generating creative names and descriptions for clusters/routes
 
 ## 🚀 Getting Started
 
