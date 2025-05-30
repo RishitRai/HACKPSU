@@ -45,17 +45,19 @@ const LocationQuizScreen = ({ route, navigation }) => {
         { useNativeDriver: false }
       ),
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          handleSwipe(false); // Need more help
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          handleSwipe(true); // Understood
-        } else {
-          Animated.spring(position, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
-        }
-      },
+  if (gesture.dx > SWIPE_THRESHOLD) {
+    handleSwipe(true, SCREEN_WIDTH);  // Right swipe → understood
+  } else if (gesture.dx < -SWIPE_THRESHOLD) {
+    handleSwipe(false, -SCREEN_WIDTH); // Left swipe → need more help
+  } else {
+    Animated.spring(position, {
+      toValue: { x: 0, y: 0 },
+      useNativeDriver: false,
+    }).start();
+  }
+},
+
+
     })
   ).current;
 
@@ -64,36 +66,36 @@ const LocationQuizScreen = ({ route, navigation }) => {
     fetchNextHint();
   }, []);
 
-  const fetchNextHint = async (userResponse, updatedAccept, updatedReject) => {
+  const fetchNextHint = async (userResponse = null, updatedAccept = acceptCount, updatedReject = rejectCount) => {
+  if (isHintFinal) return;
 
+  setLoadingHints(true);
 
-    if (isHintFinal) return;
-    setLoadingHints(true);
+  try {
+    const response = await axios.post(
+      'http://192.168.70.128:5000/generate_location_hint',
+      {
+        location_name: destination.name,
+        previous_hint_id: currentHintId,
+        user_response: userResponse,
+        reject_count: updatedReject,
+        accept_count: updatedAccept
+      }
+    );
 
-    try {
-      const response = await axios.post(
-        'http://192.168.0.170:5000/generate_location_hint',
-        {
-          location_name: destination.name,
-          previous_hint_id: currentHintId,
-          user_response: userResponse,
-          reject_count: updatedReject,
-          accept_count: updatedAccept
-        }
-      );
+    const { hint, is_final } = response.data;
+    setCurrentHint(hint.text);
+    setCurrentHintId(hint.id);
+    setIsHintFinal(is_final);
 
-      const { hint, is_final } = response.data;
-      setCurrentHint(hint.text);
-      setCurrentHintId(hint.id);
-      setIsHintFinal(is_final);
-      setLoadingHints(false);
+  } catch (error) {
+    console.error("Error fetching hint:", error);
+    setCurrentHint("This is a popular location in this area.");
+  } finally {
+    setLoadingHints(false);
+  }
+};
 
-    } catch (error) {
-      console.error("Error fetching hint:", error);
-      setCurrentHint("This is a popular location in this area.");
-      setLoadingHints(false);
-    }
-  };
 
   const generateQuizQuestions = () => {
     const questions = [
@@ -126,15 +128,15 @@ const LocationQuizScreen = ({ route, navigation }) => {
     setQuizData(questions);
   };
 
- const handleSwipe = (understood) => {
-  if (isHintFinal && understood) {
-    // If the hint is final and the user understood, go to the next question
-    Animated.timing(position, {
-      toValue: { x: -SCREEN_WIDTH, y: 0 },
-      duration: 250,
-      useNativeDriver: false,
-    }).start(() => {
-      position.setValue({ x: 0, y: 0 });
+ const handleSwipe = (understood, directionX) => {
+  Animated.timing(position, {
+    toValue: { x: directionX, y: 0 },
+    duration: 250,
+    useNativeDriver: false,
+  }).start(() => {
+    position.setValue({ x: 0, y: 0 });
+
+    if (isHintFinal && understood) {
       setIsHintFinal(false);
       setRejectCount(1);
       setAcceptCount(1);
@@ -143,30 +145,23 @@ const LocationQuizScreen = ({ route, navigation }) => {
 
       if (currentCardIndex < quizData.length - 1) {
         setCurrentCardIndex(currentCardIndex + 1);
-        fetchNextHint(null, acceptCount, rejectCount);
+        fetchNextHint(); // reset for next card
       } else {
         setQuizCompleted(true);
       }
-    });
-  } else {
-    Animated.timing(position, {
-      toValue: { x: understood ? -SCREEN_WIDTH : SCREEN_WIDTH, y: 0 },
-      duration: 250,
-      useNativeDriver: false,
-    }).start(() => {
-      position.setValue({ x: 0, y: 0 });
-
+    } else {
       const userResponse = understood ? "understood" : "confused";
       const updatedAccept = understood && acceptCount < 3 ? acceptCount + 1 : acceptCount;
       const updatedReject = !understood && rejectCount < 3 ? rejectCount + 1 : rejectCount;
 
       setAcceptCount(updatedAccept);
       setRejectCount(updatedReject);
-
       fetchNextHint(userResponse, updatedAccept, updatedReject);
-    });
-  }
+    }
+  });
 };
+
+
 
 
 
