@@ -45,7 +45,7 @@ Built during HackPSU, Voyagr aims to make exploration effortless by combining in
 ### 1. Clone the Repository
 
 ```sh
-git clone <your-repo-url>
+git clone https://github.com/RishitRai/HACKPSU.git
 cd HACKPSU
 ```
 
