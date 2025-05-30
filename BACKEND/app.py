@@ -10,7 +10,7 @@ from google.genai import types
 from generator_code import RouteOptimizer  # Import your RouteOptimizer class
 from utils import query_database, get_database_outputs
 
-# Load API keys from .en
+# Load API keys from .env
 load_dotenv()
 api = os.getenv("API_KEY")
 gen_key = os.getenv("GEN_API")
