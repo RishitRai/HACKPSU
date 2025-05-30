@@ -9,6 +9,13 @@ from google import genai
 from google.genai import types
 from generator_code import RouteOptimizer  # Import your RouteOptimizer class
 from utils import query_database, get_database_outputs
+import base64
+import requests
+from io import BytesIO
+from PIL import Image
+import imagehash
+from supabase import create_client
+from supabase import create_client
 
 # Load API keys from .env
 load_dotenv()
@@ -17,7 +24,10 @@ gen_key = os.getenv("GEN_API")
 class_url = os.getenv("CLASS_URL")
 class_key = os.getenv("CLASS_KEY")
 search_id = os.getenv("SEARCH_ID")
+SUPABASE_URL = os.getenv("SUPABASE_URL").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY").strip()
 
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 genai_client = genai.Client(api_key=gen_key)
 
 # Initialize Flask App
@@ -583,6 +593,191 @@ def check_user_location():
 
     except:
         return False   
+    
+def calculate_phash(image_base64_string):
+    # ... (implementation from previous response)
+    print("[DEBUG] calculate_phash: Received image_base64_string")
+    try:
+        image_data = base64.b64decode(image_base64_string)
+        print("[DEBUG] calculate_phash: Image successfully decoded from base64.")
+        image = Image.open(BytesIO(image_data))
+        hash_val = imagehash.phash(image.convert('L')) # pHash works well on greyscale
+        print(f"[DEBUG] calculate_phash: pHash calculated: {str(hash_val)}")
+        return str(hash_val)
+    except Exception as e:
+        print(f"[ERROR] calculate_phash: Error calculating pHash: {e}")
+        return None
+
+# --- Modified Supabase Image Verification Endpoint ---
+@app.route('/verify_location_image_supabase', methods=['POST'])
+def verify_location_image_supabase():
+    print("[DEBUG] /verify_location_image_supabase: Received request.")
+    YOUR_TABLE_NAME = "checkpoints" # <--- CHANGE THIS TO YOUR ACTUAL TABLE NAME
+
+    if not supabase:
+        print("[ERROR] /verify_location_image_supabase: Supabase client not initialized.")
+        return jsonify({"error": "Supabase client not initialized.", "is_match": False, "confidence": 0.0}), 500
+
+    try:
+        data = request.json
+        image_base64 = data.get('image')
+        location_name = data.get('location_name')
+
+        print(f"[DEBUG] /verify_location_image_supabase: Location Name: {location_name}")
+        if not image_base64 or not location_name:
+            # ... (error handling)
+            print("[ERROR] /verify_location_image_supabase: Missing 'image' or 'location_name'.")
+            return jsonify({"error": "Missing required parameters: image and location_name"}), 400
+
+        uploaded_image_hash_str = calculate_phash(image_base64)
+        if not uploaded_image_hash_str:
+            # ... (error handling)
+            print("[ERROR] /verify_location_image_supabase: Could not calculate pHash for uploaded image.")
+            return jsonify({"error": "Failed to process uploaded image.", "is_match": False, "confidence": 0.0}), 500
+        
+        uploaded_phash = imagehash.hex_to_hash(uploaded_image_hash_str)
+        print(f"[DEBUG] /verify_location_image_supabase: Uploaded image pHash: {uploaded_image_hash_str}")
+
+        # Fetch reference image hashes from Supabase
+        # Assuming you added 'image_hash' column and use 'image_path' for URL
+        print(f"[DEBUG] /verify_location_image_supabase: Fetching reference hashes for '{location_name}' from table '{YOUR_TABLE_NAME}'")
+        # Select 'image_hash' and 'image_path' (and 'description' if you add it)
+        response = supabase.table(YOUR_TABLE_NAME).select('image_hash, image_path').ilike('location_name', f'%{location_name}%').execute()
+        
+        if not response.data:
+            print(f"[WARN] /verify_location_image_supabase: No sample images found in Supabase for location containing '{location_name}'. Trying exact match.")
+            response = supabase.table(YOUR_TABLE_NAME).select('image_hash, image_path').eq('location_name', location_name).execute()
+            if not response.data:
+                 print(f"[WARN] /verify_location_image_supabase: Still no sample images found for exact location_name '{location_name}'.")
+                 return jsonify({
+                    "error": f"No sample images found for location: {location_name}",
+                    "is_match": False, "confidence": 0.0, "matching_info": []
+                }), 404
+        
+        print(f"[DEBUG] /verify_location_image_supabase: Found {len(response.data)} reference image(s) for '{location_name}'.")
+
+        min_distance = float('inf')
+        best_match_info = None
+        matching_samples_details = []
+        hash_length = len(uploaded_image_hash_str) * 4 
+
+        for sample in response.data:
+            sample_hash_str = sample.get('image_hash') # Essential: Get the stored hash
+            if not sample_hash_str:
+                print(f"[WARN] /verify_location_image_supabase: Sample (ID potentially {sample.get('id', 'N/A')}) is missing 'image_hash' in DB.")
+                continue
+            
+            print(f"[DEBUG] /verify_location_image_supabase: Comparing with DB sample hash: {sample_hash_str}")
+            try:
+                reference_phash = imagehash.hex_to_hash(sample_hash_str)
+                distance = uploaded_phash - reference_phash
+                print(f"[DEBUG] /verify_location_image_supabase: Hamming distance: {distance}")
+
+                current_confidence = max(0.0, (hash_length - distance) / hash_length)
+                # Use image_path for the URL, and a generic name if no description column
+                sample_name = f"Reference for {location_name}" # Or sample.get('description') if you add that column
+                
+                current_match_detail = {
+                    "name": sample_name,
+                    "score": current_confidence,
+                    "distance": distance,
+                    "reference_hash": sample_hash_str,
+                    "image_url": sample.get('image_path') # Use image_path
+                }
+                matching_samples_details.append(current_match_detail)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    best_match_info = current_match_detail
+            except Exception as e:
+                print(f"[ERROR] /verify_location_image_supabase: Error comparing with hash '{sample_hash_str}': {e}")
+                continue
+        
+        match_threshold = 30 
+        is_match = min_distance <= match_threshold
+        final_confidence = best_match_info['score'] if best_match_info else 0.0
+
+        print(f"[INFO] /verify_location_image_supabase: Min distance: {min_distance}, Is Match: {is_match}, Confidence: {final_confidence}")
+        matching_samples_details.sort(key=lambda x: x['score'], reverse=True)
+
+        return jsonify({
+            "is_match": is_match,
+            "confidence": final_confidence,
+            "matching_info": [best_match_info] if best_match_info and is_match else matching_samples_details[:1],
+            # ... (debug info as before)
+            "debug": {
+                "location_searched": location_name,
+                "uploaded_image_hash": uploaded_image_hash_str,
+                "samples_found_count": len(response.data),
+                "min_distance_found": min_distance if min_distance != float('inf') else "N/A",
+                "match_threshold": match_threshold,
+            }
+        })
+        
+    except Exception as e:
+        # ... (error handling as before)
+        print(f"[FATAL ERROR] /verify_location_image_supabase: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({ "error": str(e), "message": "Error processing image verification request" }), 500
+
+# --- Endpoint to add sample images (modified for 'image_path' and 'image_hash') ---
+@app.route('/add_sample_image', methods=['POST'])
+def add_sample_image():
+    print("[DEBUG] /add_sample_image: Received request.")
+    YOUR_TABLE_NAME = "checkpoints" # <--- CHANGE THIS TO YOUR ACTUAL TABLE NAME
+
+    if not supabase:
+        print("[ERROR] /add_sample_image: Supabase client not initialized.")
+        return jsonify({"error": "Supabase client not initialized."}), 500
+
+    try:
+        data = request.json
+        location_name = data.get('location_name')
+        image_base64 = data.get('image_data')  # Base64 of the image to calculate hash
+        # This image_path would be the public URL obtained AFTER uploading the image to Supabase Storage bucket.
+        # Your frontend or another process should handle uploading to Storage and then provide this URL.
+        image_path_url = data.get('image_path') # Expecting the public URL from Supabase Storage
+
+        print(f"[DEBUG] /add_sample_image: Location: {location_name}, Image Path URL: {image_path_url}")
+
+        if not location_name or not image_base64 or not image_path_url:
+            print("[ERROR] /add_sample_image: Missing 'location_name', 'image_data' (for hash calc), or 'image_path' (URL).")
+            return jsonify({"error": "Missing required parameters: location_name, image_data, and image_path"}), 400
+        
+        image_phash = calculate_phash(image_base64)
+        if not image_phash:
+            # ... (error handling)
+            print("[ERROR] /add_sample_image: Could not calculate pHash for sample image.")
+            return jsonify({"error": "Failed to process sample image for hashing."}), 500
+        
+        print(f"[DEBUG] /add_sample_image: Calculated pHash for sample: {image_phash}")
+
+        insert_data = {
+            'location_name': location_name.strip(),
+            'image_hash': image_phash,         # Store the calculated hash
+            'image_path': image_path_url,      # Store the public URL to the image in Storage
+            # 'description': data.get('description', '') # Uncomment if you add a description column
+        }
+        print(f"[DEBUG] /add_sample_image: Inserting data into Supabase table '{YOUR_TABLE_NAME}': {insert_data}")
+        
+        response = supabase.table(YOUR_TABLE_NAME).insert(insert_data).execute()
+        
+        if hasattr(response, 'error') and response.error:
+            # ... (error handling)
+            print(f"[ERROR] /add_sample_image: Supabase insert error: {response.error}")
+            return jsonify({ "success": False, "message": "Failed to add sample image.", "error_details": str(response.error) }), 500
+
+        print(f"[INFO] /add_sample_image: Sample image added successfully. Response: {response.data}")
+        return jsonify({ "success": True, "message": "Sample image details added successfully!", "data": response.data })
+        
+    except Exception as e:
+        # ... (error handling as before)
+        print(f"[FATAL ERROR] /add_sample_image: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({ "error": str(e), "message": "Error adding sample image" }), 500
+
 
 
 # Run Flask App
