@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useTheme, Card, Title, Paragraph, Button } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const TripSelectionScreen = ({ }) => {
   const { colors } = useTheme();
@@ -40,6 +41,7 @@ const TripSelectionScreen = ({ }) => {
           popularity: cluster["Popularity"] || "0",
           destinations: cluster.Route.map((entry) => ({
             name: entry.Name || "Unknown Destination",
+            mystery: entry["Mystery Name"]|| "Mystical Place",
             modeOfTransport: entry["Mode of Transport"] || "N/A",
             mapLink: entry["Google Maps Link"] || "N/A",
             lat: parseFloat(entry.Destination?.split(",")[0]),
@@ -69,23 +71,61 @@ const TripSelectionScreen = ({ }) => {
   const renderRouteCard = ({ item }) => (
     <Card style={[styles.card, { backgroundColor: colors.surface }]}>
       <Card.Cover source={item.image} style={styles.cardImage} />
-      <Card.Content>
-        <Title style={[styles.title, { color: colors.text }]}>{item.name}</Title>
-        <Paragraph style={{ color: colors.text }}>Number of Locations: {item.locationCount}</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Estimated Time: {item.estimatedTime} min</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Estimated Distance: {item.estimatedDistance} km</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Ratings: {item.ratings}</Paragraph>
-        <Paragraph style={{ color: colors.text }}>Popularity: {item.popularity}</Paragraph>
+      <Card.Content style={styles.cardContent}>
+        <View style={styles.titleSection}>
+          <Text style={[styles.title, { color: colors.text }]}>{item.name}</Text>
+          <View style={styles.ratingBadge}>
+            <Text style={styles.ratingText}>★ {item.ratings}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.statsContainer}>
+          <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="place" size={18} color="#00FF00" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.locationCount}</Text>
+              </View>
+              <Text style={styles.statLabel}>Locations</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="access-time" size={18} color="#FFD700" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.estimatedTime}</Text>
+              </View>
+              <Text style={styles.statLabel}>Minutes</Text>
+            </View>
+          </View>
+          
+          <View style={styles.statRow}>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="straighten" size={18} color="#FF6B6B" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.estimatedDistance}</Text>
+              </View>
+              <Text style={styles.statLabel}>Kilometers</Text>
+            </View>
+            <View style={styles.statItem}>
+              <View style={styles.statWithIcon}>
+                <Icon name="trending-up" size={18} color="#4ECDC4" style={styles.statIcon} />
+                <Text style={styles.statNumber}>{item.popularity}</Text>
+              </View>
+              <Text style={styles.statLabel}>Popularity</Text>
+            </View>
+          </View>
+        </View>
       </Card.Content>
-      <Card.Actions>
+      
+      <View style={styles.cardFooter}>
         <Button
           mode="contained"
           onPress={() => openResultScreen(item)}
           style={styles.button}
+          labelStyle={styles.buttontext}
         >
           Start
         </Button>
-      </Card.Actions>
+      </View>
     </Card>
   );
 

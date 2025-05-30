@@ -45,7 +45,8 @@ const TripSelectionScreen = () => {
             ratings: route["Ratings"] || "N/A",
             popularity: route["Popularity"] || "N/A",
             destinations: route.Route.map((entry) => ({
-              name: entry.Name || "Unknown Destination",
+              name: entry.Name || "New Destination",
+              mystery: entry["Mystery Name"]|| "Mystical Place",
               modeOfTransport: entry["Mode of Transport"] || "N/A",
               mapLink: entry["Google Maps Link"] || "N/A",
               lat: parseFloat(entry.Destination?.split(",")[0]),

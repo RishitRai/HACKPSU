@@ -87,7 +87,8 @@ const ResultScreen = ({ route, navigation }) => {
                 <View style={styles.destinationRow}>
                   <View style={styles.destinationInfo}>
                     <Text style={[styles.locationName, { color: colors.text }]}>
-                      {destination.name}
+                      {destination.mystery} 
+                      
                     </Text>
                     <Text style={styles.transportMode}>
                       {destination.modeOfTransport}

@@ -109,11 +109,17 @@ const NavigationScreen = ({ route, navigation }) => {
   };
 
   const verifyPhotoLocation = async () => {
-    if (!capturedImage) return;
+    if (!capturedImage) {
+      console.log("[DEBUG] verifyPhotoLocation: No captured image to verify.");
+      Alert.alert("No Image", "Please capture or select an image first.");
+      return;
+    }
     
     setCheckingPhoto(true);
     setLandmarkInfo(null); // Reset landmark info
-    
+    console.log("[DEBUG] verifyPhotoLocation: Starting verification for location:", nextDestination.name);
+    console.log("[DEBUG] verifyPhotoLocation: Captured image URI:", capturedImage.uri);
+  
     try {
       // Convert image to base64
       const base64Image = await FileSystem.readAsStringAsync(capturedImage.uri, {
@@ -123,30 +129,62 @@ const NavigationScreen = ({ route, navigation }) => {
       // Send to backend for landmark-only verification
       const response = await axios.post('http://192.168.0.170:5000/verify_location_image', {
         image: base64Image,
-        location_name: nextDestination.name,
-        location_lat: nextDestination.lat,
+        location_name: nextDestination.name, // Ensure this is the correct name expected by backend
+        location_lat: nextDestination.lat,   // Sending lat/lng in case backend uses them later
         location_lng: nextDestination.lng
-      });
+      };
+      console.log("[DEBUG] verifyPhotoLocation: Sending payload to backend:", payload.location_name, payload.location_lat, payload.location_lng);
+  
+      const response = await axios.post('http://100.64.14.73:5000/verify_location_image_supabase', payload);
       
+      console.log("[DEBUG] verifyPhotoLocation: Received response from backend:", JSON.stringify(response.data, null, 2));
+  
       // Store landmark information for display
-      if (response.data.matching_landmarks && response.data.matching_landmarks.length > 0) {
-        setLandmarkInfo(response.data.matching_landmarks);
+      // The backend now returns matching_info as an array, potentially with one best match or top potentials.
+      // Ensure the structure matches what you expect for LandmarkInfo display.
+      // matching_info is expected to be an array of objects like { name: "...", score: 0.9 }
+      if (response.data.matching_info && response.data.matching_info.length > 0) {
+        setLandmarkInfo(response.data.matching_info); // This should be an array
+        console.log("[DEBUG] verifyPhotoLocation: LandmarkInfo set with:", response.data.matching_info);
+      } else if (response.data.debug_all_comparisons && response.data.debug_all_comparisons.length > 0) {
+        // Fallback: if matching_info is empty but there were comparisons, show top one from debug
+        // setLandmarkInfo([response.data.debug_all_comparisons[0]]); 
+        // console.log("[DEBUG] verifyPhotoLocation: LandmarkInfo set with debug comparison:", [response.data.debug_all_comparisons[0]]);
       }
       
       if (response.data.is_match) {
-        setIsAtLocation(true);
-        setPreviewVisible(false);
-        handleSuccessfulVerification();
-      } else {
+        setIsAtLocation(true); // Assuming this state means checkpoint verified
+        setPreviewVisible(false); // Close the preview modal on success
         Alert.alert(
-          "Image Verification Failed",
-          "The photo doesn't match the expected landmark.",
-          [{ text: "Try Again" }]
+          "Image Verified!",
+          "The photo matches the location.", // <--- MODIFIED LINE
+          [{ text: "OK", onPress: handleSuccessfulVerification }] // Proceed to next step
         );
-      }
+      // ...
+    } else {
+      Alert.alert(
+        "Image Verification Failed",
+        response.data.error || "The photo doesn't appear to match the expected location.", // <--- MODIFIED LINE
+        [{ text: "Try Again" }]
+      );
+    }
     } catch (error) {
-      console.error("Photo verification error:", error);
-      Alert.alert("Error", "Could not verify photo: " + (error.response?.data?.error || error.message));
+      console.error("[ERROR] verifyPhotoLocation: Photo verification error:", error);
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error("[ERROR] verifyPhotoLocation: Backend Response Data:", error.response.data);
+        console.error("[ERROR] verifyPhotoLocation: Backend Response Status:", error.response.status);
+        //Alert.alert("Verification Error", Server error: ${error.response.data?.error || error.response.data?.message || 'Unknown server error'});
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error("[ERROR] verifyPhotoLocation: No response received:", error.request);
+        Alert.alert("Network Error", "Could not connect to the server. Please check your network connection and the server IP address.");
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error("[ERROR] verifyPhotoLocation: Error setting up request:", error.message);
+        Alert.alert("Client Error", "An error occurred while preparing the verification request: " + error.message);
+      }
     } finally {
       setCheckingPhoto(false);
     }
