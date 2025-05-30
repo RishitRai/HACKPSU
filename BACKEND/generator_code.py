@@ -58,7 +58,7 @@ class RouteOptimizer:
         - base_keywords: List of base keywords (categories)
         - maxresult: Max number of places to return
         - lat, lon: Latitude and Longitude
-        - radius: Search radius (meters)
+        - radius: Search radius (miles)
         
         Returns:
         - List of places (up to maxresult)
@@ -108,7 +108,7 @@ class RouteOptimizer:
                             "latitude": lat,
                             "longitude": lon
                         },
-                        "radius": radius
+                        "radius": (radius*1609)
                     }
                 }
             }
@@ -439,6 +439,28 @@ class RouteOptimizer:
         except Exception as e:
             return "No description available."
         
+    
+    def generate_mysterious_route_name(self, place_name):
+        """
+        Generates a mysterious, gamified name for a route segment.
+        """
+        prompt = f"Generate a unique, mysterious, adventure-themed name for a route leading to '{place_name}'. The name should sound like a quest or adventure mission, be intriguing and engaging for gamification purposes. Make it sound epic and mysterious, like 'The Path of Hidden Wonders' or 'Journey to the Crimson Gate'. Keep it short and memorable."
+
+        try:
+            response = self.genai_client.models.generate_content(
+                model='gemini-2.0-flash-001',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="Generate just one mysterious, adventure-themed route name without any description or additional formatting.",
+                    max_output_tokens=30,
+                    temperature=0.9,  # Higher temperature for more creative names
+                ),
+            )
+            
+            return response.text.strip() if response.text else f"Mystical Place"
+        except:
+            return f"Mystical Place"
+        
 
 
     def get_place_image(self, query):
@@ -573,6 +595,7 @@ class RouteOptimizer:
 
                 route_entry = {
                     "Name": segment["name"],
+                    "Mystery Name": self.generate_mysterious_route_name(segment["destination"]),
                     "Origin": segment["origin"],
                     "Destination": segment["destination"],
                     "Estimated Travel Distance (km)": round(segment["distance"], 1),

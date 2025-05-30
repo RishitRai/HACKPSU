@@ -1,18 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  Animated,
-  Image,
-  TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
-  PanResponder
-} from 'react-native';
+import {View,Text,StyleSheet,  Dimensions,  Animated,  Image,  TouchableOpacity,  SafeAreaView,  ActivityIndicator,  PanResponder} from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import axios from 'axios';
+import MapView, { Marker } from 'react-native-maps';
+
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -30,9 +21,9 @@ const LocationQuizScreen = ({ route, navigation }) => {
   const [currentHintId, setCurrentHintId] = useState(null);
   const [isHintFinal, setIsHintFinal] = useState(false);
   const [loadingHints, setLoadingHints] = useState(true);
-  const [rejectCount, setRejectCount] = useState(1);
-  const [acceptCount, setAcceptCount] = useState(1);
-
+  const [rejectCount, setRejectCount] = useState(0);
+  const [acceptCount, setAcceptCount] = useState(0);
+  const [showAnswerAfterSwipes, setShowAnswerAfterSwipes] = useState(false);
   const position = useRef(new Animated.ValueXY()).current;
 
   const SWIPE_THRESHOLD = 120;
@@ -46,9 +37,9 @@ const LocationQuizScreen = ({ route, navigation }) => {
       ),
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dx > SWIPE_THRESHOLD) {
-          handleSwipe(false); // Need more help
+          handleSwipe(false); 
         } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          handleSwipe(true); // Understood
+          handleSwipe(true); 
         } else {
           Animated.spring(position, {
             toValue: { x: 0, y: 0 },
@@ -65,9 +56,8 @@ const LocationQuizScreen = ({ route, navigation }) => {
   }, []);
 
   const fetchNextHint = async (userResponse, updatedAccept, updatedReject) => {
+    if (isHintFinal || showAnswerAfterSwipes) return;
 
-
-    if (isHintFinal) return;
     setLoadingHints(true);
 
     try {
@@ -82,13 +72,22 @@ const LocationQuizScreen = ({ route, navigation }) => {
         }
       );
 
-      const { hint, is_final } = response.data;
-      setCurrentHint(hint.text);
-      setCurrentHintId(hint.id);
-      setIsHintFinal(is_final);
-      setLoadingHints(false);
+      
+    const { hint, is_final } = response.data;
+    
+    if (updatedReject >= 3 || updatedAccept >= 3) {
+  setShowAnswerAfterSwipes(true);
+  setLoadingHints(false);
+  return;
+}
 
-    } catch (error) {
+
+    setCurrentHint(hint.text);
+    setCurrentHintId(hint.id);
+    setIsHintFinal(is_final);
+    setLoadingHints(false);
+
+  } catch (error) {
       console.error("Error fetching hint:", error);
       setCurrentHint("This is a popular location in this area.");
       setLoadingHints(false);
@@ -125,48 +124,42 @@ const LocationQuizScreen = ({ route, navigation }) => {
 
     setQuizData(questions);
   };
-
- const handleSwipe = (understood) => {
-  if (isHintFinal && understood) {
-    // If the hint is final and the user understood, go to the next question
-    Animated.timing(position, {
-      toValue: { x: -SCREEN_WIDTH, y: 0 },
-      duration: 250,
-      useNativeDriver: false,
-    }).start(() => {
-      position.setValue({ x: 0, y: 0 });
-      setIsHintFinal(false);
-      setRejectCount(1);
-      setAcceptCount(1);
-      setCurrentHint("");
-      setCurrentHintId(null);
-
-      if (currentCardIndex < quizData.length - 1) {
-        setCurrentCardIndex(currentCardIndex + 1);
-        fetchNextHint(null, acceptCount, rejectCount);
-      } else {
-        setQuizCompleted(true);
-      }
-    });
-  } else {
-    Animated.timing(position, {
-      toValue: { x: understood ? -SCREEN_WIDTH : SCREEN_WIDTH, y: 0 },
-      duration: 250,
-      useNativeDriver: false,
-    }).start(() => {
-      position.setValue({ x: 0, y: 0 });
-
+  
+  const handleSwipe = (understood) => {
+  setAcceptCount((prevAccept) => {
+    const updatedAccept = understood && prevAccept < 3 ? prevAccept + 1 : prevAccept;
+    if (updatedAccept >= 3 || rejectCount >= 3) {
+      setShowAnswerAfterSwipes(true);
+      setLoadingHints(false);
+    } else {
       const userResponse = understood ? "understood" : "confused";
-      const updatedAccept = understood && acceptCount < 3 ? acceptCount + 1 : acceptCount;
-      const updatedReject = !understood && rejectCount < 3 ? rejectCount + 1 : rejectCount;
+      fetchNextHint(userResponse, updatedAccept, rejectCount);
+    }
+    return updatedAccept;
+  });
 
-      setAcceptCount(updatedAccept);
-      setRejectCount(updatedReject);
+  setRejectCount((prevReject) => {
+    const updatedReject = !understood && prevReject < 3 ? prevReject + 1 : prevReject;
+    if (updatedReject >= 3 || acceptCount >= 3) {
+      setShowAnswerAfterSwipes(true);
+      setLoadingHints(false);
+    } else {
+      const userResponse = understood ? "understood" : "confused";
+      fetchNextHint(userResponse, acceptCount, updatedReject);
+    }
+    return updatedReject;
+  });
 
-      fetchNextHint(userResponse, updatedAccept, updatedReject);
-    });
-  }
+  // animate regardless
+  Animated.timing(position, {
+    toValue: { x: understood ? -SCREEN_WIDTH : SCREEN_WIDTH, y: 0 },
+    duration: 250,
+    useNativeDriver: false,
+  }).start(() => {
+    position.setValue({ x: 0, y: 0 });
+  });
 };
+
 
 
 
@@ -184,70 +177,73 @@ const LocationQuizScreen = ({ route, navigation }) => {
   };
 
   const renderCurrentQuestion = () => {
-  if (currentCardIndex >= quizData.length) {
-    return renderNoMoreCards();
-  }
+    if (currentCardIndex >= quizData.length) {
+      return renderNoMoreCards();
+    }
 
-  const item = quizData[currentCardIndex];
+    const item = quizData[currentCardIndex];
 
-  return (
-    <Animated.View
-      {...panResponder.panHandlers}
-      style={[
-        styles.cardStyle,
-        {
-          transform: [
-            { translateX: position.x },
-            {
-              rotate: position.x.interpolate({
-                inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-                outputRange: ['-10deg', '0deg', '10deg'],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      <View style={styles.cardContent}>
-        <View style={styles.cardTopRow}>
-          <Text style={styles.sideLabel}>← Need Help</Text>
-          <Text style={styles.questionCounter}>
-            Question {currentCardIndex + 1}/{quizData.length}
-          </Text>
-          <Text style={styles.sideLabel}>Understood →</Text>
+    return (
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.cardStyle,
+          {
+            transform: [
+              { translateX: position.x },
+              {
+                rotate: position.x.interpolate({
+                  inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+                  outputRange: ['-10deg', '0deg', '10deg'],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.cardContent}>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.sideLabel}>← Need Help</Text>
+            <Text style={styles.questionCounter}>
+              Question {currentCardIndex + 1}/{quizData.length}
+            </Text>
+            <Text style={styles.sideLabel}>Understood →</Text>
+          </View>
+
+          <Text style={styles.questionText}>{item.question}</Text>
+
+          {/* Hint Section */}
+          <View style={styles.hintContainer}>
+  <Text style={styles.hintTitle}>Helpful Hint:</Text>
+  {loadingHints ? (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="small" color="#00FF00" />
+      <Text style={styles.loadingText}>Generating hint...</Text>
+    </View>
+  ) : showAnswerAfterSwipes ? (
+    <Text style={styles.revealText}>The answer is: {destination.name}</Text>
+  ) : (
+    <Text style={styles.hintText}>{currentHint}</Text>
+  )}
+</View>
+
+
+          {/* Answer Options */}
+          <View style={styles.answerButtonsContainer}>
+            {item.options.map((option, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.answerButton}
+                onPress={() => handleAnswerSelection(option)}
+              >
+                <Text style={styles.answerButtonText}>{option.text}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-
-        <Text style={styles.questionText}>{item.question}</Text>
-
-        {/* Hint Section */}
-        <View style={styles.hintContainer}>
-          <Text style={styles.hintTitle}>Helpful Hint:</Text>
-          {loadingHints ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#00FF00" />
-              <Text style={styles.loadingText}>Generating hint...</Text>
-            </View>
-          ) : (
-            <Text style={styles.hintText}>{currentHint}</Text>
-          )}
-        </View>
-
-        {/* Answer Options */}
-        <View style={styles.answerButtonsContainer}>
-          {item.options.map((option, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.answerButton}
-              onPress={() => handleAnswerSelection(option)}
-            >
-              <Text style={styles.answerButtonText}>{option.text}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </Animated.View>
-  );
-};
+      </Animated.View>
+    );
+  };
 
   const renderNoMoreCards = () => (
     <View style={styles.noMoreCardsContainer}>
@@ -268,11 +264,35 @@ const LocationQuizScreen = ({ route, navigation }) => {
               ? `Great job identifying ${destination.name}!`
               : `The correct answer was ${destination.name}.`}
           </Text>
-          <Image
-            source={trip.image}
-            style={styles.destinationImage}
-            resizeMode="cover"
-          />
+        <MapView
+            style={{
+            width: Dimensions.get('window').width - 32,
+            height: 200,
+            borderRadius: 12,
+            alignSelf: 'center',
+            marginTop: 16,
+          }}
+          initialRegion={{
+          latitude: destination.lat,
+          longitude: destination.lng,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+          }}
+          showsUserLocation={false} 
+          zoomControlEnabled={true}
+        >
+        <Marker
+          coordinate={{
+          latitude: destination.lat,
+          longitude: destination.lng
+        }}
+        title={destination.name}
+        pinColor="red"
+      />
+      </MapView>
+
+
+
           <Text style={styles.destinationDescription}>
             {destination.name} is your {nextIndex === currentIndex ? "current" : "next"} destination.
           </Text>
@@ -435,7 +455,7 @@ hintTitle: {
     marginTop: 10,
   },
   answerButton: {
-  backgroundColor: '#1e3a8a', // Dark blue tone
+  backgroundColor: '#1e3a8a', 
   padding: 16,
   borderRadius: 12,
   marginBottom: 14,
@@ -485,7 +505,7 @@ answerButtonText: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#00FF00',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   completedText: {
     fontSize: 18,
@@ -500,10 +520,11 @@ answerButtonText: {
     marginBottom: 20,
   },
   destinationDescription: {
+    marginTop: 20,
     fontSize: 16,
     color: '#DDDDDD',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 30
   },
   continueButton: {
     backgroundColor: '#00FF00',
