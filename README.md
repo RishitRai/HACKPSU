@@ -1,4 +1,4 @@
-🌍![WhatsApp Image 2025-03-30 at 2 04 50 AM](https://github.com/user-attachments/assets/8e0e26b4-d1bd-4f4a-acbd-d9c8b4ba5af2)
+![Newimg](https://github.com/user-attachments/assets/8e0e26b4-d1bd-4f4a-acbd-d9c8b4ba5af2)
 
 
 Voyagr is a smart travel planning app that creates optimized itineraries based on your preferences, accessibility needs, and travel style — all in real time.
