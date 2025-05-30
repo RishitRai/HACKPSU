@@ -16,7 +16,7 @@ Built during HackPSU, Voyagr aims to make exploration effortless by combining in
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native (Expo)
-- ## Backend
+- ## Backend: ##
 
 - **Flask** – Python web framework for building REST APIs
 - **pymongo** – MongoDB Atlas (cloud database) integration
