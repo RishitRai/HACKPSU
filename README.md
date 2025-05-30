@@ -48,29 +48,34 @@ cd HACKPSU
 
 ---
 
-### 3. Backend Setup
+### 3. Backend Setup (with Virtual Environment)
 
-1. Install dependencies:
-
+1. **Navigate to the backend folder:**
     ```sh
-    pip install flask pymongo
+    cd backend
     ```
 
-2. Update your Flask app with your MongoDB connection string:
-
-    ```python
-    # In app.py
-    MONGO_URI = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/<dbname>?retryWrites=true&w=majority"
+2. **Create and activate a virtual environment:**
+    ```sh
+    python -m venv venv
+    venv\Scripts\activate   # On Windows
+    # or
+    source venv/bin/activate  # On Mac/Linux
     ```
 
-3. Start the backend:
+3. **Install dependencies:**
+    ```sh
+    pip install -r requirements.txt
+    ```
 
+4. **Set up your `.env` file** with your API keys and MongoDB URI.
+
+5. **Start the backend:**
     ```sh
     python app.py
     ```
 
 ---
-
 ### 4. Frontend Setup
 
 1. Install dependencies:
