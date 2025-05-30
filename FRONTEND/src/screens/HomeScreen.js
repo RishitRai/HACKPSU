@@ -12,12 +12,14 @@ import { useTheme, Card } from 'react-native-paper';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { MaterialIcons } from '@expo/vector-icons';
 
-
+// Get screen width for layout calculations
 const screenWidth = Dimensions.get('window').width;
 
+// Home screen displaying activity summary, stats, and earned badges
 const HomeScreen = () => {
-  const { colors } = useTheme();
+  const { colors } = useTheme(); // Use theme to adapt to dark/light mode
 
+  // List of badge images
   const badges = [
     require('../assets/Badge1.png'),
     require('../assets/Badge2.png'),
@@ -26,30 +28,32 @@ const HomeScreen = () => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background, marginTop: 45 }]}>
-      {/* Profile Icon in Top Right */}
+      
+      {/* Profile Icon (top-right) */}
       <View style={styles.profileRow}>
         <TouchableOpacity onPress={() => {}}>
-  <View style={styles.profileIconCircle}>
-    <MaterialIcons name="person" size={26} color="#fff" />
-  </View>
-</TouchableOpacity>
-
+          <View style={styles.profileIconCircle}>
+            <MaterialIcons name="person" size={26} color="#fff" />
+          </View>
+        </TouchableOpacity>
       </View>
 
-
+      {/* Page Title */}
       <Text style={[styles.header, { color: colors.text }]}>  Home  </Text>
 
-      {/* Activity Rings */}
+      {/* Activity Rings Section */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <Card.Content>
           <Text style={[styles.activityText, { color: colors.text }]}>Your Activity</Text>
+          
           <View style={styles.ringsRow}>
+            {/* Animated progress rings (concentric) */}
             <View style={styles.ringsContainer}>
               <AnimatedCircularProgress
                 size={180}
                 width={16}
                 fill={80}
-                tintColor="#FF3B30"
+                tintColor="#FF3B30" // Red ring
                 backgroundColor="#3c3c3c"
                 rotation={0}
                 lineCap="round"
@@ -59,7 +63,7 @@ const HomeScreen = () => {
                 size={140}
                 width={16}
                 fill={60}
-                tintColor="#4CD964"
+                tintColor="#4CD964" // Green ring
                 backgroundColor="#2c2c2c"
                 rotation={0}
                 lineCap="round"
@@ -69,13 +73,15 @@ const HomeScreen = () => {
                 size={100}
                 width={16}
                 fill={40}
-                tintColor="#5AC8FA"
+                tintColor="#5AC8FA" // Blue ring
                 backgroundColor="#1e1e1e"
                 rotation={0}
                 lineCap="round"
                 style={styles.ring}
               />
             </View>
+
+            {/* Legend describing each ring */}
             <View style={styles.legendTextContainer}>
               <Text style={[styles.legendTextItem, { color: '#FF3B30' }]}>Miles Covered</Text>
               <Text style={[styles.legendTextItem, { color: '#4CD964' }]}>Places Visited</Text>
@@ -85,7 +91,7 @@ const HomeScreen = () => {
         </Card.Content>
       </Card>
 
-      {/* Miles Covered */}
+      {/* Miles Covered Summary */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <Card.Content>
           <Text style={[styles.subHeader, { color: colors.text }]}>Miles Covered</Text>
@@ -96,7 +102,7 @@ const HomeScreen = () => {
         </Card.Content>
       </Card>
 
-      {/* Badges */}
+      {/* Badge Gallery */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <Card.Content>
           <Text style={[styles.subHeader, { color: colors.text }]}>Badges</Text>
@@ -111,13 +117,16 @@ const HomeScreen = () => {
   );
 };
 
+export default HomeScreen;
 
+// Styles for HomeScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
   },
 
+  // Top row with profile icon
   profileRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -126,16 +135,15 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 
-profileIconCircle: {
-  width: 40,
-  height: 40,
-  borderRadius: 20,
-  backgroundColor: '#A9A9A9', // Light gray (similar to your screenshot)
-  justifyContent: 'center',
-  alignItems: 'center',
-}
-,
-
+  // Circle background for profile icon
+  profileIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#A9A9A9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   header: {
     fontSize: 22,
@@ -225,5 +233,3 @@ profileIconCircle: {
     borderRadius: 40,
   },
 });
-
-export default HomeScreen;

@@ -1,679 +1,583 @@
-import requests
-import numpy as np
-import faiss
-import json
-import time
-from dotenv import load_dotenv
+from flask import Flask, request, jsonify
+from pymongo import MongoClient
+from flask_cors import CORS
 import os
+import json
+import requests
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from generator_code import RouteOptimizer
+from utils import query_database, get_database_outputs
+import base64
+import requests
+from io import BytesIO
+from PIL import Image
+import imagehash
+from supabase import create_client
+from supabase import create_client
 
-#from urllib.parse import urlencode
-
-class RouteOptimizer:
-    def __init__(self, api_key, gen_api, class_url, class_key, search_id):
-        self.api_key = api_key
-        self.class_url = class_url
-        self.class_key = class_key
-        self.search_id = search_id
-        self.genai_client = genai.Client(api_key=gen_api)
-
-    def extract_lat_lng(self, input_address, data_type='json'):
-        """
-        Extracts latitude and longitude from an address using Google Geocoding API.
-        """
-        endpoint = f"https://maps.googleapis.com/maps/api/geocode/{data_type}" 
-        params = {
-            "address": input_address,
-            "key": self.api_key
-        }
-
-        try:
-            response = requests.get(endpoint, params=params)
-            response.raise_for_status()
-
-            data = response.json()
-            if "results" in data and data["results"]:
-                latlng = data["results"][0]["geometry"]["location"]
-                return latlng.get("lat"), latlng.get("lng")
-            else:
-                return None, None
-        except:
-            return None, None
-        
-    def starting_point(self, use_current, starting_point):
-        if use_current:
-            current_location = self.get_current_location_google()
-        else:
-            current_location = self.extract_lat_lng(starting_point)
-        return current_location
-        
-
-    def nearby_places_multi_keyword(self, base_keywords, maxresult, lat, lon, radius):
-        """
-        Fetches nearby places using multiple base keywords (categories).
-        
-        Parameters:
-        - api_key: Google Places API key
-        - base_keywords: List of base keywords (categories)
-        - maxresult: Max number of places to return
-        - lat, lon: Latitude and Longitude
-        - radius: Search radius (miles)
-        
-        Returns:
-        - List of places (up to maxresult)
-        """
-        if lat is None or lon is None:
-            return []
-        
-        endpoint_places = "https://places.googleapis.com/v1/places:searchNearby"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": self.api_key,
-            "X-Goog-FieldMask": "places.displayName,places.accessibilityOptions,places.location,places.currentOpeningHours,places.id"
-        }
-        
-        keyword_map = {
-            "attraction": ["tourist_attraction", "museum", "landmark", "art_gallery", "town_square"],
-            "nature": ["park", "natural_feature", "zoo", "aquarium", "beach", "rv_park"],
-            "entertainment": ["amusement_park", "casino", "bowling_alley", "movie_theater", "stadium", "night_club"],
-            "food": ["restaurant", "cafe", "bar", "bakery", "liquor_store", "meal_takeaway"],
-            "shopping": ["shopping_mall", "clothing_store", "shoe_store", "jewelry_store", "supermarket", "department_store", "gift shop"],
-            "religious": ["church", "mosque", "synagogue", "hindu_temple"]
-        }
-        
-        # Ensure base_keywords is a list
-        if not isinstance(base_keywords, list):
-            base_keywords = [base_keywords]
-
-        # Collect all related keywords for each base keyword
-        keywords_set = set()
-        for base_keyword in base_keywords:
-            related_keywords = keyword_map.get(base_keyword, [base_keyword])
-            keywords_set.update(related_keywords)
-
-        keywords = list(keywords_set)
-        
-        all_places = []
-        seen_ids = set()
-        
-        for keyword in keywords:
-            data = {
-                "includedTypes": [keyword],
-                "maxResultCount": 20,
-                "locationRestriction": {
-                    "circle": {
-                        "center": {
-                            "latitude": lat,
-                            "longitude": lon
-                        },
-                        "radius": (radius*1609)
-                    }
-                }
-            }
-            
-            try:
-                response = requests.post(endpoint_places, headers=headers, json=data)
-                response.raise_for_status()
-                
-                response_data = response.json()
-                
-                if "places" in response_data and response_data["places"]:
-                    for place in response_data["places"]:
-                        place_id = place.get("id")
-                        if place_id and place_id not in seen_ids:
-                            seen_ids.add(place_id)
-                            all_places.append(place)
-                            
-                            if len(all_places) >= maxresult:
-                                break
-                else:
-                    # If no places are found for a keyword, just continue
-                    continue
-                    
-                time.sleep(2)  # delay between requests to avoid rate limits
-            except:
-                continue
-        
-        return all_places[:maxresult]
-
-
-    def sorted_place_details(self, response_data, accessible = False):
-        """
-        Extracts relevant details from the given API response.
-        """
-        extracted_data = []
-
-        if not response_data:
-            return []
-
-        for place in response_data:
-            name = place.get("displayName", {}).get("text", None)
-            latitude = place.get("location", {}).get("latitude", None)
-            longitude = place.get("location", {}).get("longitude", None)
-            open_now = place.get("currentOpeningHours", {}).get("openNow", None)
-            next_closing_time = place.get("currentOpeningHours", {}).get("nextCloseTime", None)
-
-            if open_now is True:
-                open_status = "Yes"
-            elif open_now is False:
-                open_status = "No"
-            else:
-                open_status = None
-
-            accessibility = place.get("accessibilityOptions", {})
-
-            # Check for weelchair accessibility
-            if accessible:
-                access = (
-                    accessibility.get("wheelchairAccessibleParking", False) or
-                    accessibility.get("wheelchairAccessibleEntrance", False) or
-                    accessibility.get("wheelchairAccessibleRestroom", False) or
-                    accessibility.get("wheelchairAccessibleSeating", False)
-                )
-                if not access:
-                    continue
-
-            extracted_data.append({
-                "Place Name": name,
-                "Location": {"Latitude": latitude, "Longitude": longitude} if latitude is not None and longitude is not None else None,
-                "Open Now": open_status,
-                "Next Closing Time": next_closing_time,
-                "Accessibility Options": {
-                    "Wheelchair Accessible Parking": "Yes" if accessibility.get("wheelchairAccessibleParking", False) else "No",
-                    "Wheelchair Accessible Entrance": "Yes" if accessibility.get("wheelchairAccessibleEntrance", False) else "No",
-                    "Wheelchair Accessible Restroom": "Yes" if accessibility.get("wheelchairAccessibleRestroom", False) else "No",
-                    "Wheelchair Accessible Seating": "Yes" if accessibility.get("wheelchairAccessibleSeating", False) else "No"
-                }
-            })
-
-        return extracted_data
-
-    def location_extractor(self, place):
-        """
-        Extracts lat/lon as a string for Google Maps API.
-        """
-        try:
-            location = place.get("Location", None)
-            if location and isinstance(location, dict):
-                lat, lon = location.get("Latitude"), location.get("Longitude")
-                if lat is not None and lon is not None:
-                    return f"{lat},{lon}"
-        except:
-            return None
-
-    def cluster_locations_faiss(self, places, max_groups):
-        """
-        Clusters locations using FAISS.
-        """
-        valid_places = []
-        valid_locations = []
-        
-        # Get valid locations first
-        for place in places:
-            loc = self.location_extractor(place)
-            if loc is not None:
-                valid_places.append(place)
-                valid_locations.append(loc)
-        
-        if not valid_locations:
-            return {}
-
-        # Convert to numpy array for FAISS
-        location_array = []
-        for latlon in valid_locations:
-            try:
-                lat, lon = map(float, latlon.split(','))
-                location_array.append([lat, lon])
-            except ValueError:
-                continue
-                
-        if not location_array:
-            return {}
-            
-        locations_np = np.array(location_array, dtype=np.float32)
-        num_clusters = min(max_groups, len(locations_np))
-        
-        # Need at least one cluster
-        if num_clusters < 1:
-            return {}
-        
-        # Initialize and train FAISS kmeans
-        kmeans = faiss.Kmeans(d=2, k=num_clusters, niter=20, verbose=False)
-        kmeans.train(locations_np)
-        
-        # Get cluster assignments
-        _, labels = kmeans.index.search(locations_np, 1)
-        labels = labels.flatten()
-        
-        # Group places by cluster
-        clusters = {}
-        for i, label in enumerate(labels):
-            label_int = int(label)
-            if label_int not in clusters:
-                clusters[label_int] = []
-            clusters[label_int].append(valid_places[i])
-        
-        return clusters
-
-    def transport_mode(self, distance_km, user_modes = None):
-        """
-        Dynamically selects the best mode of transport based on distance.
-        """
-        if user_modes is None or not user_modes:
-            user_modes = ["driving"]
-        
-        if distance_km <= 1.5 and "walking" in user_modes:
-            return "walking"
-        elif 1.5 < distance_km <= 5 and "bicycling" in user_modes:
-            return "bicycling"
-        elif distance_km > 5 and "transit" in user_modes:
-            return "transit"
-        else:
-            if "driving" in user_modes:
-                return "driving"  
-            else:
-                return user_modes[0]
-
-
-
-    def compute_total_distance_time(self, places, user_modes = None):
-        """
-        Computes the total distance and time required to cover all locations in order.
-        """
-        if user_modes is None:
-            user_modes = ["driving"]
-        
-        url = "https://routes.googleapis.com/directions/v2:computeRoutes"
-        headers = {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": self.api_key,
-            "X-Goog-FieldMask": "routes.distanceMeters,routes.duration"
-        }
-
-        # Get valid locations
-        locations = []
-        for place in places:
-            loc = self.location_extractor(place)
-            if loc:
-                locations.append(loc)
-
-        if len(locations) < 2:
-            return []
-
-        segment_data = []
-        
-        for i in range(len(locations) - 1):
-            try:
-                origin_parts = locations[i].split(",")
-                dest_parts = locations[i + 1].split(",")
-                
-                data = {
-                    "origin": {
-                        "location": {
-                            "latLng": {
-                                "latitude": float(origin_parts[0]),
-                                "longitude": float(origin_parts[1])
-                            }
-                        }
-                    },
-                    "destination": {
-                        "location": {
-                            "latLng": {
-                                "latitude": float(dest_parts[0]),
-                                "longitude": float(dest_parts[1])
-                            }
-                        }
-                    },
-                    "routingPreference": "TRAFFIC_AWARE"
-                }
-                
-                response = requests.post(url, headers = headers, json = data)
-                response.raise_for_status()
-                route_data = response.json()
-                
-                if "routes" in route_data and route_data["routes"]:
-                    route = route_data["routes"][0]
-                    distance_meters = route.get("distanceMeters", 0)
-                    
-                    # Handle duration which might be a string with 's' suffix or a number
-                    duration_str = route.get("duration", "0")
-                    if isinstance(duration_str, str) and duration_str.endswith('s'):
-                        duration_seconds = int(duration_str[:-1])
-                    else:
-                        duration_seconds = int(duration_str)
-                    
-                    distance_km = round(distance_meters / 1000, 2)
-                    duration_min = round(duration_seconds / 60, 2)
-                    
-                    # Determine transportation mode based on distance
-                    mode = self.transport_mode(distance_km, user_modes)
-                    
-                    segment_data.append({
-                        "name": places[i + 1]["Place Name"],
-                        "origin": locations[i],
-                        "destination": locations[i + 1],
-                        "distance": distance_km,
-                        "time": duration_min,
-                        "mode": mode
-                    })  
-                time.sleep(1)  # Rate limiting
-                
-            except:
-                continue
-        
-        return segment_data
-
-
-    def get_current_location_google(self):
-        """
-        Fetches the user's current location using the Google Geolocation API.
-        """
-        url = "https://www.googleapis.com/geolocation/v1/geolocate"
-        params = {"key": self.api_key}
-        
-        try:
-            response = requests.post(url, params=params, json={})
-            response.raise_for_status()  # Raise an error if the request fails
-            data = response.json()
-
-            location = data.get("location", {})
-            latitude = location.get("lat")
-            longitude = location.get("lng")
-            if latitude is not None and longitude is not None:
-                return latitude, longitude
-            else:
-                return None, None
-        except:
-            return None, None
-
-
-    def name_generator(self, cluster_places):
-        """
-        Generates a unique, catchy, and creative name for a cluster of places.
-        """
-        # Combine place names into a single string for the prompt
-        place_names = ", ".join([place["Name"] for place in cluster_places if place.get("Name")])
-        
-        # Refined prompt to generate a catchy name directly
-        prompt = f"Generate a unique, catchy, and creative name for a cluster of places: {place_names}. The name should be short, memorable, and reflect the essence of this group."
-
-        try:
-            # Use the Gemini model for content generation
-            response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash-001',  # Adjust the model version if necessary
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="Generate just one unique and catchy name for the given cluster of places without any description.",
-                    max_output_tokens=50,  # Allow a slightly longer output to get full descriptions
-                    temperature=0.7,       # Control randomness
-                ),
-            )
-            
-            # Return the generated name
-            return response.text.strip() if response.text else "Unnamed Cluster"
-        except:
-            return "Unnamed Cluster" 
-    
-    def description_generator(self, cluster_places):
-        """
-        Generates a unique, catchy, and creative description for a cluster of places.
-        """
-        place_names = ", ".join([place["Name"] for place in cluster_places if place.get("Name")])
-        prompt = f"Generate a creative description for a cluster of places: {place_names}. The description should have 5 sentences and should be memorable, and reflect the essence of this group. Do not include options, lists, or additional formatting."
-
-        try:
-            response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash-001',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="Generate a catchy and creative description for the given cluster of places without any additional formatting or options.",
-                    max_output_tokens=100,
-                    temperature=0.7,
-                ),
-            )
-            generated_text = response.text.strip() if response.text else "No description available."
-            clean_text = generated_text.split("\n")[0]
-            return clean_text
-        except Exception as e:
-            return "No description available."
-        
-    
-    def generate_mysterious_route_name(self, place_name):
-        """
-        Generates a mysterious, gamified name for a route segment.
-        """
-        prompt = f"Generate a unique, mysterious, adventure-themed name for a route leading to '{place_name}'. The name should sound like a quest or adventure mission, be intriguing and engaging for gamification purposes. Make it sound epic and mysterious, like 'The Path of Hidden Wonders' or 'Journey to the Crimson Gate'. Keep it short and memorable."
-
-        try:
-            response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash-001',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="Generate just one mysterious, adventure-themed route name without any description or additional formatting.",
-                    max_output_tokens=30,
-                    temperature=0.9,  # Higher temperature for more creative names
-                ),
-            )
-            
-            return response.text.strip() if response.text else f"Mystical Place"
-        except:
-            return f"Mystical Place"
-        
-
-
-    def get_place_image(self, query):
-        """
-        Fetches an image URL for a place using Google Custom Search API.
-
-        Parameters:
-        - api_key: Google API Key
-        - cx: Custom Search Engine ID
-        - query: Search query (e.g., place name)
-
-        Returns:
-        - Image URL (if available) or None
-        """
-        search_url = "https://www.googleapis.com/customsearch/v1"
-        
-        params = {
-            "key": self.api_key,
-            "cx": self.search_id,
-            "q": query,
-            "searchType": "image",  # Fetch image results
-            "num": 1  # Get only one image
-        }
-
-        try:
-            response = requests.get(search_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-            if "items" in data and len(data["items"]) > 0:
-                return data["items"][0]["link"]  # Get the first image URL
-            else:
-                return None
-
-        except:
-            return None 
-
-
-    def maps_link(self, places, user_modes=None):
-        """
-        Generates a Google Maps link for navigation with appropriate transport modes.
-        """
-        if user_modes is None:
-            user_modes = ["driving"]
-            
-        if len(places) < 2:
-            return "Not enough locations for a route"
-        
-        locations = []
-        for place in places:
-            if isinstance(place, str):
-                locations.append(place)
-            else:
-                loc = self.location_extractor(place)
-                if loc:
-                    locations.append(loc)
-        
-        if len(locations) < 2:
-            return "Not enough valid locations for a route"
-        
-        # Standard Google Maps directions URL format:
-        origin = locations[0]
-        destination = locations[-1]
-        waypoints = locations[1:-1] if len(locations) > 2 else []
-        travel_mode = user_modes[0] if user_modes else "driving"
-        
-        # Construct URL path rather than query string for directions
-        path = "/".join(locations)
-        final_url = f"https://www.google.com/maps/dir/{path}/?travelmode={travel_mode}"
-        return final_url
-
-
-    def optimize_routes(self, lat, lng, places, time_limit, max_groups, visit_duration_per_location, user_modes = None):
-        """
-        Optimizes travel routes using FAISS clustering and Google Routes API.
-        Includes estimated time spent at locations.
-        """
-        if user_modes is None:
-            user_modes = ["driving"]
-        
-        if lat is not None and lng is not None:
-            current_location = {"Latitude": lat, "Longitude": lng}
-        
-        if lat is None or lng is None:
-            return None
-        
-        # Format current location to match `places` structure
-        starting_point = {
-            "Place Name": "Your Starting Location",
-            "Location": current_location,
-            "Open Now": None,
-            "Next Closing Time": None,
-            "Accessibility Options": {
-                "Wheelchair Accessible Parking": "N/A",
-                "Wheelchair Accessible Entrance": "N/A",
-                "Wheelchair Accessible Restroom": "N/A",
-                "Wheelchair Accessible Seating": "N/A"
-            }
-        }
-        
-        places_with_locations = [place for place in places if place.get("Location")]
-        
-        clusters = self.cluster_locations_faiss(places_with_locations, max_groups)
-        optimized_routes = []
-        
-        for cluster_id, group in clusters.items():
-            if len(group) < 2:
-                continue
-            
-            if starting_point not in group:
-                group.insert(0, starting_point)
-
-            travel_info = self.compute_total_distance_time(group, user_modes)
-            
-            if not travel_info:
-                continue
-            
-            # Calculate totals
-            travel_distance = sum(numl["distance"] for numl in travel_info)
-            travel_time = sum(numl["time"] for numl in travel_info)
-            visit_time = visit_duration_per_location * len(group)
-            total_time = travel_time + visit_time
-            
-            if total_time > time_limit:
-                continue
-
-
-            routes = []
-            for segment in travel_info:
-                place_name = segment["name"]
-                image_url = self.get_place_image(place_name)
-
-                route_entry = {
-                    "Name": segment["name"],
-                    "Mystery Name": self.generate_mysterious_route_name(segment["destination"]),
-                    "Origin": segment["origin"],
-                    "Destination": segment["destination"],
-                    "Estimated Travel Distance (km)": round(segment["distance"], 1),
-                    "Estimated Travel Time (min)": round(segment["time"], 1),
-                    "Mode of Transport": segment["mode"],
-                    "Google Maps Link": self.maps_link([segment["origin"], segment["destination"]], [segment["mode"]]),
-                    "Image URL": image_url
-                }
-                routes.append(route_entry)
-
-            optimized_routes.append({
-                "Cluster ID": cluster_id,
-                "Cluster Name": self.name_generator(group),
-                "Cluster Description": self.description_generator(group),
-                "Estimated Travel Distance (km)": round(travel_distance, 1),
-                "Estimated Travel Time (min)": round(travel_time, 1),
-                "Total Estimated Time (min)": round(total_time, 1),
-                "Route": routes
-            })
-        return json.dumps(optimized_routes, indent = 4)
-    
-    def is_user_at_location(self, target_lat, target_lon, tolerance=0.01):
-        """""
-        Checks if the user is at the specified location within a given tolerance.
-
-        Parameters:
-        - target_lat: Latitude of the target location.
-        - target_lon: Longitude of the target location.
-        - tolerance: Allowed distance (in degrees) for the user to be considered "at" the location.
-
-        Returns:
-        - True if the user is at the location, False otherwise.
-        """
-        try:
-            # Get the user's current location
-            current_lat, current_lon = self.get_current_location_google()
-            if current_lat is None or current_lon is None:
-                return False
-
-            # Check if the current location is within the tolerance range of the target location
-            if abs(current_lat - target_lat) <= tolerance and abs(current_lon - target_lon) <= tolerance:
-                return True
-            else:
-                return False
-        except:
-            return False
-
-    
-"""# Apis & Keys
 load_dotenv()
 api = os.getenv("API_KEY")
 gen_key = os.getenv("GEN_API")
 class_url = os.getenv("CLASS_URL")
 class_key = os.getenv("CLASS_KEY")
 search_id = os.getenv("SEARCH_ID")
+SUPABASE_URL = os.getenv("SUPABASE_URL").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY").strip()
+MONGO_URL = os.getenv("MONGO_URL")
 
-# Input
-address = "164 E 87th St, New York, NY"
-keyword = ["attraction", "entertainment"]
-rad = 30000
-disabled = True
-mode = ["driving", "walking"]
-use_current_location = False
-time_per_location = 0
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+genai_client = genai.Client(api_key=gen_key)
 
+app = Flask(__name__)
+CORS(app)
 
-# Initialize RouteOptimizer
-optimizer = RouteOptimizer(api_key=api, gen_api = gen_key, class_url=class_url, class_key=class_key, search_id=search_id)
-lati, long = optimizer.starting_point(use_current_location, address)
-places_response = optimizer.nearby_places_multi_keyword(base_keywords = keyword, maxresult = 20, lat = lati, lon = long, radius = rad)
-final_places = optimizer.sorted_place_details(places_response, accessible = disabled)
-optimized_routes = optimizer.optimize_routes(
-    lat = lati,
-    lng = long,
-    places = final_places, 
-    time_limit = 500, 
-    max_groups = 10,  
-    visit_duration_per_location = time_per_location, 
-    user_modes = mode
-)
-print(optimized_routes)"""
+client = MongoClient(MONGO_URL)
+db = client['routeOptimizer']
+
+inputs_collection = db['inputs']
+outputs_collection = db['outputs']
+
+VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
+
+@app.route('/generate_location_hint', methods=['POST'])
+def generate_location_hint():
+    try:
+        data = request.json
+        location_name = data.get('location_name')
+        previous_hint_id = data.get('previous_hint_id', None)
+        user_response = data.get('user_response', None)
+        reject_count = data.get('reject_count', 0)
+        accept_count = data.get('accept_count', 0)
+
+        # Final answer reached
+        if previous_hint_id == "final":
+            return jsonify({
+                "hint": {
+                    "id": "final",
+                    "text": f"The answer is {location_name}.",
+                    "type": "factual"
+                },
+                "is_final": True,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        if reject_count >= 3 or accept_count >= 3:
+            return jsonify({
+                "hint": {
+                    "id": "final",
+                    "text": f"The answer is {location_name}.",
+                    "type": "factual"
+                },
+                "is_final": True,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        # Starting the quiz
+        if previous_hint_id is None:
+            hint_tree = generate_hint_tree_from_gemini(location_name)
+            
+            return jsonify({
+                "hint": {
+                    "id": "1",
+                    "text": hint_tree["tree"]["1"]["text"],
+                    "type": hint_tree["tree"]["1"]["type"]
+                },
+                "is_final": False,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+        
+        else:
+            hint_tree = generate_hint_tree_from_gemini(location_name)
+            
+            next_hint_id = None
+            if user_response == "understood":
+                next_hint_id = hint_tree["tree"][previous_hint_id]["on_understood"]
+            elif user_response == "confused":  # need to make hint easier
+                next_hint_id = hint_tree["tree"][previous_hint_id]["on_confused"]
+            
+            if next_hint_id is None or reject_count >= 3 or accept_count >= 3:
+                return jsonify({
+                    "hint": {
+                        "id": "final",
+                        "text": f"The answer is {location_name}.",
+                        "type": "factual"
+                    },
+                    "is_final": True,
+                    "reject_count": reject_count,
+                    "accept_count": accept_count
+                })
+            
+            return jsonify({
+                "hint": {
+                    "id": next_hint_id,
+                    "text": hint_tree["tree"][next_hint_id]["text"],
+                    "type": hint_tree["tree"][next_hint_id]["type"]
+                },
+                "is_final": False,
+                "reject_count": reject_count,
+                "accept_count": accept_count
+            })
+    
+    except Exception as e:
+        print(f"Error generating location hint: {str(e)}")
+        return jsonify({
+            "error": str(e),
+            "message": "Error processing hint generation request"
+        }), 500
+
+def generate_fallback_hint_tree(location_name):
+    # just in case gemini decides to fail us
+    return {
+        "place_id": location_name.lower().replace(' ', '_'),
+        "tree": {
+            "1": {
+                "text": f"This is a popular destination to visit.",
+                "type": "symbolic",
+                "on_understood": "2A",
+                "on_confused": "2B"
+            },
+            "2A": {
+                "text": f"It's a famous landmark people often photograph.",
+                "type": "symbolic",
+                "on_understood": "3A",
+                "on_confused": "2B"
+            },
+            "2B": {
+                "text": f"It's a notable location in this area.",
+                "type": "location",
+                "on_understood": "3B",
+                "on_confused": "3C"
+            },
+            "3A": {
+                "text": f"It's an attraction that draws many tourists.",
+                "type": "factual",
+                "on_understood": "4A",
+                "on_confused": "3C"
+            },
+            "3B": {
+                "text": f"You can find it on most travel itineraries.",
+                "type": "location",
+                "on_understood": "4B",
+                "on_confused": "3C"
+            },
+            "3C": {
+                "text": f"It's a must-see destination in this region.",
+                "type": "factual",
+                "on_understood": "4C",
+                "on_confused": "final"
+            },
+            "4A": {
+                "text": f"It's known as one of the highlights of this area.",
+                "type": "factual",
+                "on_understood": "final",
+                "on_confused": "final"
+            },
+            "4B": {
+                "text": f"It appears on postcards and souvenirs from here.",
+                "type": "location",
+                "on_understood": "final",
+                "on_confused": "final"
+            },
+            "4C": {
+                "text": f"It's almost certainly {location_name}.",
+                "type": "factual",
+                "on_understood": "final",
+                "on_confused": "final"
+            }
+        }
+    }
+
+def generate_hint_tree_from_gemini(location_name):
+    try:
+        prompt = f"""Generate hints for a location quiz about {location_name}. 
+        Structure the response as a JSON object with the following format:
+        {{
+          "place_id": "{location_name.lower().replace(' ', '_')}",
+          "tree": {{
+            "1": {{
+              "text": "[First hint - should be vague/symbolic]",
+              "type": "symbolic",
+              "on_understood": "2A",
+              "on_confused": "2B"
+            }},
+            "2A": {{
+              "text": "[Second level hint for those who recognized something from hint 1]",
+              "type": "symbolic",
+              "on_understood": "3A",
+              "on_confused": "2B"
+            }},
+            "2B": {{
+              "text": "[Second level hint for those who didn't recognize hint 1]",
+              "type": "location",
+              "on_understood": "3B",
+              "on_confused": "3C"
+            }},
+            "3A": {{
+              "text": "[More specific hint]",
+              "type": "factual",
+              "on_understood": "4A",
+              "on_confused": "3C"
+            }},
+            "3B": {{
+              "text": "[More specific location-based hint]",
+              "type": "location",
+              "on_understood": "4B",
+              "on_confused": "3C"
+            }},
+            "3C": {{
+              "text": "[More direct hint]",
+              "type": "factual",
+              "on_understood": "4C",
+              "on_confused": "final"
+            }},
+            "4A": {{
+              "text": "[Almost revealing hint]",
+              "type": "factual",
+              "on_understood": "final",
+              "on_confused": "final"
+            }},
+            "4B": {{
+              "text": "[Almost revealing location hint]",
+              "type": "location",
+              "on_understood": "final",
+              "on_confused": "final"
+            }},
+            "4C": {{
+              "text": "[Very obvious hint]",
+              "type": "factual",
+              "on_understood": "final",
+              "on_confused": "final"
+            }}
+          }}
+        }}
+        Only return the JSON with no other text."""
+        
+        response = genai_client.models.generate_content(
+            model='gemini-2.0-flash-001',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=1000,
+            )
+        )
+        
+        generated_text = response.text
+        
+        # sometimes gemini adds extra fluff around the JSON
+        import re
+        json_match = re.search(r'({.*})', generated_text, re.DOTALL)
+        if json_match:
+            generated_text = json_match.group(1)
+        
+        hint_tree = json.loads(generated_text)
+        return hint_tree
+        
+    except Exception as e:
+        print(f"Error calling Gemini API: {str(e)}")
+        return generate_fallback_hint_tree(location_name)
+
+@app.route('/get_inputs', methods=['GET'])
+def get_inputs():
+    try:
+        inputs_data = inputs_collection.find()
+
+        inputs_list = []
+        for input_doc in inputs_data:
+            input_doc['_id'] = str(input_doc['_id'])
+            inputs_list.append(input_doc)
+
+        return jsonify({"inputs": inputs_list}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/get_outputs', methods=['GET'])
+def get_outputs():
+    try:
+        outputs_data = outputs_collection.find()
+
+        # this formatting gets messy with nested structures
+        outputs_list = []
+        for output_doc in outputs_data:
+            formatted_doc = {
+                "_id": str(output_doc["_id"]),
+                "input_id": str(output_doc.get("input_id", "")),
+                "routes": [
+                    {
+                        "Cluster Description": route.get("Cluster Description", ""),
+                        "Cluster ID": route.get("Cluster ID", 0),
+                        "Cluster Name": route.get("Cluster Name", ""),
+                        "Estimated Travel Distance (km)": route.get("Estimated Travel Distance (km)", 0),
+                        "Estimated Travel Time (min)": route.get("Estimated Travel Time (min)", 0),
+                        "Ratings": route.get("Ratings", 0),
+                        "Popularity": route.get("Popularity", 0),
+                        "Route": [
+                            {
+                                "Destination": sub_route.get("Destination", ""),
+                                "Estimated Travel Distance (km)": sub_route.get("Estimated Travel Distance (km)", 0),
+                                "Estimated Travel Time (min)": sub_route.get("Estimated Travel Time (min)", 0),
+                                "Google Maps Link": sub_route.get("Google Maps Link", ""),
+                                "Image URL": sub_route.get("Image URL", None),
+                                "Mode of Transport": sub_route.get("Mode of Transport", ""),
+                                "Name": sub_route.get("Name", "New Place"),
+                                "Mystery Name": sub_route.get("Mystery Name", "Mystery Place"),
+                                "Origin": sub_route.get("Origin", ""),
+                            }
+                            for sub_route in route.get("Route", [])
+                        ],
+                    }
+                    for route in output_doc.get("routes", [])
+                ],
+            }
+            outputs_list.append(formatted_doc)
+
+        return jsonify({"outputs": outputs_list}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_data_from_parameters', methods=['POST'])
+def get_data_from_parameters():
+    parameters = request.json
+    input_id = query_database(inputs_collection, parameters)
+
+    if input_id:
+        outputs = get_database_outputs(outputs_collection, input_id)
+        return jsonify({"routes": outputs})
+    else:
+        return jsonify({"routes": "[]"})
+
+optimizer = RouteOptimizer(api_key = api, gen_api = gen_key, class_url = class_url, class_key = class_key, search_id = search_id)
+
+@app.route('/optimize_route', methods=['POST'])
+def optimize_route():
+    try:
+        data = request.json
+
+        address = data.get("address")
+        keywords = data.get("keyword", [])
+        radius = data.get("radius", 10)
+        accessibility = data.get("accessibility", False)
+        user_modes = data.get("modes", ["driving"])
+        use_current_location = data.get("use_current_location", False)
+        time_per_location = data.get("time_per_location", 0)
+        time_limit = data.get("time_limit", 500)
+
+        lati, long = optimizer.starting_point(use_current_location, address)
+        if lati is None or long is None:
+            return jsonify({"error": "Invalid address"}), 400
+
+        # this can take a while depending on the API
+        places_response = optimizer.nearby_places_multi_keyword(base_keywords=keywords, maxresult= 20, lat=lati, lon=long, radius=radius)
+        final_places = optimizer.sorted_place_details(places_response, accessible=accessibility)
+
+        optimized_routes = optimizer.optimize_routes(
+            lat=lati,
+            lng=long,
+            places=final_places,
+            time_limit=time_limit,
+            max_groups= 5,
+            visit_duration_per_location=time_per_location,
+            user_modes=user_modes
+        )
+
+        return jsonify({"routes": json.loads(optimized_routes)})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/check_user_location', methods=['POST'])
+def check_user_location():
+    try:
+        data = request.json
+
+        target_lat = data.get("target_lat")
+        target_lon = data.get("target_lon")
+        tolerance = data.get("tolerance", 0.01)  # roughly 1km
+
+        if target_lat is None or target_lon is None:
+            return jsonify({"error": "Target latitude and longitude are required"}), 400
+
+        is_at_location = optimizer.is_user_at_location(target_lat, target_lon, tolerance)
+
+        return jsonify({"is_at_location": is_at_location})
+
+    except:
+        return False   
+    
+def calculate_phash(image_base64_string):
+    print("[DEBUG] calculate_phash: Received image_base64_string")
+    try:
+        image_data = base64.b64decode(image_base64_string)
+        print("[DEBUG] calculate_phash: Image successfully decoded from base64.")
+        image = Image.open(BytesIO(image_data))
+        hash_val = imagehash.phash(image.convert('L'))  # greyscale works better for pHash
+        print(f"[DEBUG] calculate_phash: pHash calculated: {str(hash_val)}")
+        return str(hash_val)
+    except Exception as e:
+        print(f"[ERROR] calculate_phash: Error calculating pHash: {e}")
+        return None
+
+@app.route('/verify_location_image_supabase', methods=['POST'])
+def verify_location_image_supabase():
+    print("[DEBUG] /verify_location_image_supabase: Received request.")
+    YOUR_TABLE_NAME = "checkpoints"
+
+    if not supabase:
+        print("[ERROR] /verify_location_image_supabase: Supabase client not initialized.")
+        return jsonify({"error": "Supabase client not initialized.", "is_match": False, "confidence": 0.0}), 500
+
+    try:
+        data = request.json
+        image_base64 = data.get('image')
+        location_name = data.get('location_name')
+
+        print(f"[DEBUG] /verify_location_image_supabase: Location Name: {location_name}")
+        if not image_base64 or not location_name:
+            print("[ERROR] /verify_location_image_supabase: Missing 'image' or 'location_name'.")
+            return jsonify({"error": "Missing required parameters: image and location_name"}), 400
+
+        uploaded_image_hash_str = calculate_phash(image_base64)
+        if not uploaded_image_hash_str:
+            print("[ERROR] /verify_location_image_supabase: Could not calculate pHash for uploaded image.")
+            return jsonify({"error": "Failed to process uploaded image.", "is_match": False, "confidence": 0.0}), 500
+        
+        uploaded_phash = imagehash.hex_to_hash(uploaded_image_hash_str)
+        print(f"[DEBUG] /verify_location_image_supabase: Uploaded image pHash: {uploaded_image_hash_str}")
+
+        # trying fuzzy match first
+        print(f"[DEBUG] /verify_location_image_supabase: Fetching reference hashes for '{location_name}' from table '{YOUR_TABLE_NAME}'")
+        response = supabase.table(YOUR_TABLE_NAME).select('image_hash, image_path').ilike('location_name', f'%{location_name}%').execute()
+        
+        if not response.data:
+            print(f"[WARN] /verify_location_image_supabase: No sample images found in Supabase for location containing '{location_name}'. Trying exact match.")
+            response = supabase.table(YOUR_TABLE_NAME).select('image_hash, image_path').eq('location_name', location_name).execute()
+            if not response.data:
+                 print(f"[WARN] /verify_location_image_supabase: Still no sample images found for exact location_name '{location_name}'.")
+                 return jsonify({
+                    "error": f"No sample images found for location: {location_name}",
+                    "is_match": False, "confidence": 0.0, "matching_info": []
+                }), 404
+        
+        print(f"[DEBUG] /verify_location_image_supabase: Found {len(response.data)} reference image(s) for '{location_name}'.")
+
+        min_distance = float('inf')
+        best_match_info = None
+        matching_samples_details = []
+        hash_length = len(uploaded_image_hash_str) * 4 
+
+        for sample in response.data:
+            sample_hash_str = sample.get('image_hash')
+            if not sample_hash_str:
+                print(f"[WARN] /verify_location_image_supabase: Sample (ID potentially {sample.get('id', 'N/A')}) is missing 'image_hash' in DB.")
+                continue
+            
+            print(f"[DEBUG] /verify_location_image_supabase: Comparing with DB sample hash: {sample_hash_str}")
+            try:
+                reference_phash = imagehash.hex_to_hash(sample_hash_str)
+                distance = uploaded_phash - reference_phash
+                print(f"[DEBUG] /verify_location_image_supabase: Hamming distance: {distance}")
+
+                current_confidence = max(0.0, (hash_length - distance) / hash_length)
+                sample_name = f"Reference for {location_name}"
+                
+                current_match_detail = {
+                    "name": sample_name,
+                    "score": current_confidence,
+                    "distance": distance,
+                    "reference_hash": sample_hash_str,
+                    "image_url": sample.get('image_path')
+                }
+                matching_samples_details.append(current_match_detail)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    best_match_info = current_match_detail
+            except Exception as e:
+                print(f"[ERROR] /verify_location_image_supabase: Error comparing with hash '{sample_hash_str}': {e}")
+                continue
+        
+        match_threshold = 45 
+        is_match = min_distance <= match_threshold
+        final_confidence = best_match_info['score'] if best_match_info else 0.0
+
+        print(f"[INFO] /verify_location_image_supabase: Min distance: {min_distance}, Is Match: {is_match}, Confidence: {final_confidence}")
+        matching_samples_details.sort(key=lambda x: x['score'], reverse=True)
+
+        return jsonify({
+            "is_match": is_match,
+            "confidence": final_confidence,
+            "matching_info": [best_match_info] if best_match_info and is_match else matching_samples_details[:1],
+            "debug": {
+                "location_searched": location_name,
+                "uploaded_image_hash": uploaded_image_hash_str,
+                "samples_found_count": len(response.data),
+                "min_distance_found": min_distance if min_distance != float('inf') else "N/A",
+                "match_threshold": match_threshold,
+            }
+        })
+        
+    except Exception as e:
+        print(f"[FATAL ERROR] /verify_location_image_supabase: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({ "error": str(e), "message": "Error processing image verification request" }), 500
+
+@app.route('/add_sample_image', methods=['POST'])
+def add_sample_image():
+    print("[DEBUG] /add_sample_image: Received request.")
+    YOUR_TABLE_NAME = "checkpoints"
+
+    if not supabase:
+        print("[ERROR] /add_sample_image: Supabase client not initialized.")
+        return jsonify({"error": "Supabase client not initialized."}), 500
+
+    try:
+        data = request.json
+        location_name = data.get('location_name')
+        image_base64 = data.get('image_data')
+        # expecting the URL after uploading to supabase storage
+        image_path_url = data.get('image_path')
+
+        print(f"[DEBUG] /add_sample_image: Location: {location_name}, Image Path URL: {image_path_url}")
+
+        if not location_name or not image_base64 or not image_path_url:
+            print("[ERROR] /add_sample_image: Missing 'location_name', 'image_data' (for hash calc), or 'image_path' (URL).")
+            return jsonify({"error": "Missing required parameters: location_name, image_data, and image_path"}), 400
+        
+        image_phash = calculate_phash(image_base64)
+        if not image_phash:
+            print("[ERROR] /add_sample_image: Could not calculate pHash for sample image.")
+            return jsonify({"error": "Failed to process sample image for hashing."}), 500
+        
+        print(f"[DEBUG] /add_sample_image: Calculated pHash for sample: {image_phash}")
+
+        insert_data = {
+            'location_name': location_name.strip(),
+            'image_hash': image_phash,
+            'image_path': image_path_url,
+        }
+        print(f"[DEBUG] /add_sample_image: Inserting data into Supabase table '{YOUR_TABLE_NAME}': {insert_data}")
+        
+        response = supabase.table(YOUR_TABLE_NAME).insert(insert_data).execute()
+        
+        if hasattr(response, 'error') and response.error:
+            print(f"[ERROR] /add_sample_image: Supabase insert error: {response.error}")
+            return jsonify({ "success": False, "message": "Failed to add sample image.", "error_details": str(response.error) }), 500
+
+        print(f"[INFO] /add_sample_image: Sample image added successfully. Response: {response.data}")
+        return jsonify({ "success": True, "message": "Sample image details added successfully!", "data": response.data })
+        
+    except Exception as e:
+        print(f"[FATAL ERROR] /add_sample_image: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({ "error": str(e), "message": "Error adding sample image" }), 500
+
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0')

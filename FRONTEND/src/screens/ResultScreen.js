@@ -1,20 +1,31 @@
-// Corrected
 import React from 'react';
-import { View, Text, StyleSheet, Image, SafeAreaView, Dimensions, Linking, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  SafeAreaView,
+  Dimensions,
+  Linking,
+  TouchableOpacity,
+  ScrollView
+} from 'react-native';
 import { useTheme, Button } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const ResultScreen = ({ route, navigation }) => {
-  const { colors } = useTheme();
-  const { trip } = route.params;
+  const { colors } = useTheme(); 
+  const { trip } = route.params; // Trip object passed via navigation
 
+  // Extract coordinates for the route's destinations
   const coordinates = trip.destinations.map((destination) => ({
     latitude: destination.lat,
     longitude: destination.lng,
     name: destination.name,
   }));
 
+  // Center the map on the first destination
   const initialRegion = {
     latitude: coordinates[0]?.latitude || 37.7749,
     longitude: coordinates[0]?.longitude || -122.4194,
@@ -22,18 +33,20 @@ const ResultScreen = ({ route, navigation }) => {
     longitudeDelta: 0.009,
   };
 
+  // Navigate to the quiz/checkpoint screen for a specific destination
   const navigateToDestination = (index) => {
     navigation.navigate('LocationQuiz', {
       currentIndex: index,
       nextIndex: index + 1 < trip.destinations.length ? index + 1 : index,
-      trip: trip
+      trip: trip,
     });
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Hero Section */}
+        
+        {/* Main Section - Shows  cover image and title */}
         <View style={styles.heroSection}>
           <Image source={trip.image} style={styles.image} />
           <View style={styles.overlayContent}>
@@ -46,7 +59,7 @@ const ResultScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Minimalistic Stats Section */}
+        {/* Summary stats like duration, distance, etc. */}
         <View style={styles.statsSection}>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
@@ -66,36 +79,34 @@ const ResultScreen = ({ route, navigation }) => {
               <Text style={styles.statLabel}>Rating</Text>
             </View>
           </View>
-          
+
+          {/* Description of the trip */}
           <Text style={[styles.description, { color: colors.text }]}>{trip.description}</Text>
         </View>
 
-        {/* Minimalistic Journey Section */}
+        {/* Journey section with destinations and navigation buttons */}
         <Text style={[styles.sectionHeader, { color: colors.text }]}>Journey</Text>
-        
         <View style={styles.journeyContainer}>
           {trip.destinations.map((destination, index) => (
             <View key={index} style={styles.stepContainer}>
-              {/* Simple step indicator */}
+              
+              {/* Visual indicator (dot + line) */}
               <View style={styles.stepIndicator}>
                 <View style={styles.stepDot} />
                 {index < trip.destinations.length - 1 && <View style={styles.stepLine} />}
               </View>
-              
-              {/* Destination content */}
+
+              {/* Destination info and navigation button */}
               <View style={styles.stepContent}>
                 <View style={styles.destinationRow}>
                   <View style={styles.destinationInfo}>
                     <Text style={[styles.locationName, { color: colors.text }]}>
-                      {destination.mystery} 
-                      
+                      {destination.mystery}
                     </Text>
-                    <Text style={styles.transportMode}>
-                      {destination.modeOfTransport}
-                    </Text>
+                    <Text style={styles.transportMode}>{destination.modeOfTransport}</Text>
                   </View>
-                  
-                  <TouchableOpacity 
+
+                  <TouchableOpacity
                     style={styles.navButton}
                     onPress={() => navigateToDestination(index)}
                   >
@@ -107,13 +118,10 @@ const ResultScreen = ({ route, navigation }) => {
           ))}
         </View>
 
-        {/* Map Section */}
+        {/* Map displaying all destination pins */}
         <Text style={[styles.sectionHeader, { color: colors.text }]}>Map</Text>
         <View style={styles.mapContainer}>
-          <MapView
-            style={styles.map}
-            initialRegion={initialRegion}
-          >
+          <MapView style={styles.map} initialRegion={initialRegion}>
             {coordinates.map((location, index) => (
               <Marker
                 key={index}
@@ -127,9 +135,9 @@ const ResultScreen = ({ route, navigation }) => {
           </MapView>
         </View>
 
-        {/* Start Journey Button */}
-        <Button 
-          mode="contained" 
+        {/* CTA to start the journey */}
+        <Button
+          mode="contained"
           style={styles.startButton}
           onPress={() => navigateToDestination(0)}
           labelStyle={styles.startButtonText}
@@ -142,6 +150,7 @@ const ResultScreen = ({ route, navigation }) => {
 };
 
 export default ResultScreen;
+
 
 const styles = StyleSheet.create({
   container: {
@@ -159,7 +168,6 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 220,
-    borderRadius: 0,
   },
   overlayContent: {
     position: 'absolute',
@@ -204,8 +212,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'left',
   },
-  
-  // Minimalistic Stats Styles
   statsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -237,8 +243,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 16,
   },
-  
-  // Minimalistic Journey Styles
   journeyContainer: {
     paddingHorizontal: 16,
     marginBottom: 10,
@@ -293,7 +297,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
   mapContainer: {
     paddingHorizontal: 16,
     marginBottom: 20,

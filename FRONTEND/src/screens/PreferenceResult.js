@@ -1,33 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator } from 'react-native';
-import { useTheme, Card, Title, Paragraph, Button } from 'react-native-paper';
+import { View, StyleSheet, FlatList, SafeAreaView, ActivityIndicator, Text } from 'react-native';
+import { useTheme, Card, Title, Button } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-const TripSelectionScreen = ({ }) => {
+// Main screen that displays a list of trip route options
+const TripSelectionScreen = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  const { outp } = useRoute().params; // Extract data passed from TripPreferencesScreen
+  const { outp } = useRoute().params; // Get data passed from TripPreferencesScreen
 
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Extract the first valid image from a route
+  // Get the first valid image URL from a route (fallback to placeholder if none)
   const getFirstValidImage = (route) => {
     for (const entry of route.Route || []) {
-      if (entry["Image URL"]) {
-        return { uri: entry["Image URL"] };
-      }
+      if (entry["Image URL"]) return { uri: entry["Image URL"] };
     }
-    return require('../assets/placeholder.jpg'); // Fallback image
+    return require('../assets/placeholder.jpg'); // Default placeholder image
   };
 
-  // Count the number of locations in a route
+  // Count number of valid locations in a route
   const locationCounter = (route) => {
     return route.Route?.filter((loc) => loc["Name"]).length || 0;
   };
 
-  // Format the received response into usable route objects
+  // Format the received `outp` data into structured trip objects
   useEffect(() => {
     const formatRoutes = () => {
       try {
@@ -41,81 +40,59 @@ const TripSelectionScreen = ({ }) => {
           popularity: cluster["Popularity"] || "0",
           destinations: cluster.Route.map((entry) => ({
             name: entry.Name || "Unknown Destination",
-            mystery: entry["Mystery Name"]|| "Mystical Place",
+            mystery: entry["Mystery Name"] || "Mystical Place",
             modeOfTransport: entry["Mode of Transport"] || "N/A",
             mapLink: entry["Google Maps Link"] || "N/A",
             lat: parseFloat(entry.Destination?.split(",")[0]),
             lng: parseFloat(entry.Destination?.split(",")[1]),
           })),
           locationCount: locationCounter(cluster),
-          image: getFirstValidImage(cluster), // Use the first valid image or placeholder
+          image: getFirstValidImage(cluster),
         }));
 
-        setRoutes(formattedRoutes); // Set formatted routes in state
+        setRoutes(formattedRoutes);
       } catch (error) {
         console.error('Error formatting routes:', error);
       } finally {
-        setLoading(false); // Stop loading spinner
+        setLoading(false); // Hide spinner once formatting is done
       }
     };
 
     formatRoutes();
-  }, [outp]); // Run whenever outp changes
+  }, [outp]);
 
-  // Navigate to the Result screen with selected trip details
+  // Navigate to the Result screen with the selected trip
   const openResultScreen = (trip) => {
     navigation.navigate('Result', { trip });
   };
 
-  // Render a single route card
+  // Renders each trip card in the list
   const renderRouteCard = ({ item }) => (
     <Card style={[styles.card, { backgroundColor: colors.surface }]}>
       <Card.Cover source={item.image} style={styles.cardImage} />
       <Card.Content style={styles.cardContent}>
+        {/* Title and rating */}
         <View style={styles.titleSection}>
           <Text style={[styles.title, { color: colors.text }]}>{item.name}</Text>
           <View style={styles.ratingBadge}>
             <Text style={styles.ratingText}>★ {item.ratings}</Text>
           </View>
         </View>
-        
+
+        {/* Travel stats: locations, time, distance, popularity */}
         <View style={styles.statsContainer}>
           <View style={styles.statRow}>
-            <View style={styles.statItem}>
-              <View style={styles.statWithIcon}>
-                <Icon name="place" size={18} color="#00FF00" style={styles.statIcon} />
-                <Text style={styles.statNumber}>{item.locationCount}</Text>
-              </View>
-              <Text style={styles.statLabel}>Locations</Text>
-            </View>
-            <View style={styles.statItem}>
-              <View style={styles.statWithIcon}>
-                <Icon name="access-time" size={18} color="#FFD700" style={styles.statIcon} />
-                <Text style={styles.statNumber}>{item.estimatedTime}</Text>
-              </View>
-              <Text style={styles.statLabel}>Minutes</Text>
-            </View>
+            <Stat label="Locations" value={item.locationCount} icon="place" color="#00FF00" />
+            <Stat label="Minutes" value={item.estimatedTime} icon="access-time" color="#FFD700" />
           </View>
-          
           <View style={styles.statRow}>
-            <View style={styles.statItem}>
-              <View style={styles.statWithIcon}>
-                <Icon name="straighten" size={18} color="#FF6B6B" style={styles.statIcon} />
-                <Text style={styles.statNumber}>{item.estimatedDistance}</Text>
-              </View>
-              <Text style={styles.statLabel}>Kilometers</Text>
-            </View>
-            <View style={styles.statItem}>
-              <View style={styles.statWithIcon}>
-                <Icon name="trending-up" size={18} color="#4ECDC4" style={styles.statIcon} />
-                <Text style={styles.statNumber}>{item.popularity}</Text>
-              </View>
-              <Text style={styles.statLabel}>Popularity</Text>
-            </View>
+            <Stat label="Kilometers" value={item.estimatedDistance} icon="straighten" color="#FF6B6B" />
+            <Stat label="Popularity" value={item.popularity} icon="trending-up" color="#4ECDC4" />
           </View>
         </View>
       </Card.Content>
-      
+
+      {/* Start trip button */}
       <View style={styles.cardFooter}>
         <Button
           mode="contained"
@@ -129,7 +106,7 @@ const TripSelectionScreen = ({ }) => {
     </Card>
   );
 
-  // Show loading spinner while formatting routes
+  // Show loading spinner while processing
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -138,7 +115,7 @@ const TripSelectionScreen = ({ }) => {
     );
   }
 
-  // Render routes or fallback if no routes are found
+  // Render trip list or fallback message
   return (
     <SafeAreaView style={styles.container}>
       {routes.length > 0 ? (
@@ -159,6 +136,18 @@ const TripSelectionScreen = ({ }) => {
 
 export default TripSelectionScreen;
 
+// Component for reusable stat row items
+const Stat = ({ label, value, icon, color }) => (
+  <View style={styles.statItem}>
+    <View style={styles.statWithIcon}>
+      <Icon name={icon} size={18} color={color} style={styles.statIcon} />
+      <Text style={styles.statNumber}>{value}</Text>
+    </View>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
+
+// Styles for the component UI
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -192,13 +181,65 @@ const styles = StyleSheet.create({
     height: 180,
     resizeMode: 'cover',
   },
+  cardContent: {
+    paddingBottom: 10,
+  },
+  titleSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 8,
+  },
+  ratingBadge: {
+    backgroundColor: '#444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  ratingText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  statsContainer: {
+    marginTop: 10,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statIcon: {
+    marginRight: 5,
+  },
+  statNumber: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#ccc',
+    marginTop: 4,
+  },
+  cardFooter: {
+    padding: 10,
+    alignItems: 'flex-end',
   },
   button: {
-    marginLeft: 'auto',
     borderRadius: 10,
+  },
+  buttontext: {
+    fontWeight: 'bold',
   },
 });

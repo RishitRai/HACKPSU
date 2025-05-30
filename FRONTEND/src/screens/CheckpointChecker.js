@@ -43,7 +43,7 @@ const NavigationScreen = ({ route, navigation }) => {
   const checkLocation = async () => {
     setCheckingLocation(true);
     try {
-      const response = await axios.post('http://100.64.14.73:5000/check_user_location', {
+      const response = await axios.post('http://192.168.0.170:5000/check_user_location', {
         target_lat: nextDestination.lat,
         target_lon: nextDestination.lng,
         tolerance: 0.01
@@ -125,9 +125,10 @@ const NavigationScreen = ({ route, navigation }) => {
       const base64Image = await FileSystem.readAsStringAsync(capturedImage.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-
-      // Send to backend for landmark-only verification
-      const response = await axios.post('http://192.168.0.170:5000/verify_location_image', {
+      console.log("[DEBUG] verifyPhotoLocation: Image converted to base64 (first 100 chars):", base64Image.substring(0, 100));
+  
+      // Send to backend for Supabase-based verification
+      const payload = {
         image: base64Image,
         location_name: nextDestination.name, // Ensure this is the correct name expected by backend
         location_lat: nextDestination.lat,   // Sending lat/lng in case backend uses them later
@@ -135,7 +136,7 @@ const NavigationScreen = ({ route, navigation }) => {
       };
       console.log("[DEBUG] verifyPhotoLocation: Sending payload to backend:", payload.location_name, payload.location_lat, payload.location_lng);
   
-      const response = await axios.post('http://100.64.14.73:5000/verify_location_image_supabase', payload);
+      const response = await axios.post('http://192.168.0.170:5000/verify_location_image_supabase', payload);
       
       console.log("[DEBUG] verifyPhotoLocation: Received response from backend:", JSON.stringify(response.data, null, 2));
   
@@ -157,14 +158,14 @@ const NavigationScreen = ({ route, navigation }) => {
         setPreviewVisible(false); // Close the preview modal on success
         Alert.alert(
           "Image Verified!",
-          "The photo matches the location.", // <--- MODIFIED LINE
+          "The photo matches the location.", 
           [{ text: "OK", onPress: handleSuccessfulVerification }] // Proceed to next step
         );
       // ...
     } else {
       Alert.alert(
         "Image Verification Failed",
-        response.data.error || "The photo doesn't appear to match the expected location.", // <--- MODIFIED LINE
+        response.data.error || "The photo doesn't appear to match the expected location.", 
         [{ text: "Try Again" }]
       );
     }
@@ -282,6 +283,7 @@ const NavigationScreen = ({ route, navigation }) => {
           <Button 
             mode="contained" 
             style={[styles.button, styles.verifyButton]}
+            labelStyle={{color:'black',fontWeight:'bold'}}
             icon="map-marker"
             onPress={checkLocation}
             loading={checkingLocation}
@@ -293,6 +295,7 @@ const NavigationScreen = ({ route, navigation }) => {
           <Button 
             mode="contained" 
             style={[styles.button, styles.verifyButton]}
+            labelStyle={{color:'black',fontWeight:'bold'}}
             icon="camera"
             onPress={openCamera}
           >
@@ -303,6 +306,7 @@ const NavigationScreen = ({ route, navigation }) => {
         <Button 
           mode="outlined" 
           style={[styles.button, { marginTop: 16 }]}
+          labelStyle={{color:'black',fontWeight:'bold'}}
           onPress={() => navigation.goBack()}
         >
           Back to Route Details
@@ -453,6 +457,7 @@ const styles = StyleSheet.create({
   button: {
     borderRadius: 8,
     paddingVertical: 6,
+    backgroundColor: '#39FF14'
   },
   verifyButton: {
     flex: 0.48,

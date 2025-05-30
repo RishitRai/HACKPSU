@@ -1,6 +1,4 @@
-# Retrieves the input ID based on the parameters
 def query_database(inputs_collection, parameters):
-    # Build query dynamically to handle empty arrays
     query = {
         "address": parameters["address"],
         "radius": parameters["radius"],
@@ -10,26 +8,24 @@ def query_database(inputs_collection, parameters):
         "time_limit": parameters["time_limit"]
     }
     
-    # Only add array fields if they're not empty
+    # arrays need special handling or mongo gets confused
     if parameters.get("keyword") and len(parameters["keyword"]) > 0:
         query["keywords"] = {"$all": parameters["keyword"]}
     else:
-        # If keywords is empty, match documents where keywords field is empty or doesn't exist
         query["keywords"] = {"$in": [[], None]}
     
     if parameters.get("modes") and len(parameters["modes"]) > 0:
         query["modes"] = {"$all": parameters["modes"]}
     else:
-        # If modes is empty, match documents where modes field is empty or doesn't exist
         query["modes"] = {"$in": [[], None]}
     
-    print("Query sent to MongoDB:", query)  # Debugging log
+    print("Query sent to MongoDB:", query)
 
     try:
         result = inputs_collection.find_one(query)
         
         if result:
-            input_id = result["_id"]  # Return the input ID
+            input_id = result["_id"]
             print(f"Found matching input with ID: {input_id}")
             return input_id
         else:
@@ -40,19 +36,18 @@ def query_database(inputs_collection, parameters):
         print(f"Error querying database: {str(e)}")
         return None
 
-# Retrieves outputs corresponding to the input ID
 def get_database_outputs(outputs_collection, input_id):
-    print("Fetching outputs for input ID:", input_id)  # Debugging log
+    print("Fetching outputs for input ID:", input_id)
 
     try:
-        # Get the outputs based on the input ID
         outputs_data = outputs_collection.find({"input_id": input_id})
 
         formatted_outputs = []
-        for output_doc in outputs_data:  # Iterate through the documents in the cursor
+        # this nested structure is a pain to format
+        for output_doc in outputs_data:
             formatted_doc = {
-                "_id": str(output_doc["_id"]),  # Convert MongoDB ObjectId to string
-                "input_id": str(output_doc.get("input_id", "")),  # Convert input_id if present
+                "_id": str(output_doc["_id"]),
+                "input_id": str(output_doc.get("input_id", "")),
                 "routes": [
                     {
                         "Cluster Description": route.get("Cluster Description", ""),
@@ -71,7 +66,7 @@ def get_database_outputs(outputs_collection, input_id):
                                 "Image URL": sub_route.get("Image URL", None),
                                 "Mode of Transport": sub_route.get("Mode of Transport", ""),
                                 "Name": sub_route.get("Name", ""),
-                                "Mystery Name": sub_route.get("Mystery Name", "Mystery Place"),
+                                "Mystery Name": sub_route.get("Mystery Name", "Mystery Place"),  # fallback name
                                 "Origin": sub_route.get("Origin", ""),
                             }
                             for sub_route in route.get("Route", [])
@@ -91,4 +86,4 @@ def get_database_outputs(outputs_collection, input_id):
         
     except Exception as e:
         print(f"Error fetching outputs from database: {str(e)}")
-        return []
+        return[]

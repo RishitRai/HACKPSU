@@ -19,23 +19,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const ProfileScreen = () => {
   const { colors } = useTheme();
   const navigation = useNavigation();
-  
+
+  // Holds user profile data
   const [userData, setUserData] = useState({
     name: '',
     email: '',
     appleLinked: false,
     profileImage: null,
   });
-  
+
+  // Various toggle states for settings
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [shareActivityEnabled, setShareActivityEnabled] = useState(true);
-  
+
   // Load user data on component mount
   useEffect(() => {
     loadUserData();
   }, []);
-  
+
+  // Load saved user data from AsyncStorage
   const loadUserData = async () => {
     try {
       const storedUserData = await AsyncStorage.getItem('userData');
@@ -46,7 +49,8 @@ const ProfileScreen = () => {
       console.error('Error loading user data:', error);
     }
   };
-  
+
+  // Save user data back to AsyncStorage
   const saveUserData = async (newData) => {
     try {
       const updatedData = { ...userData, ...newData };
@@ -57,46 +61,43 @@ const ProfileScreen = () => {
     }
   };
 
+  // Handles Apple Sign-In
   const handleAppleLogin = async () => {
     try {
       if (!AppleAuthentication.isAvailableAsync()) {
         Alert.alert('Not Available', 'Apple authentication is not available on this device');
         return;
       }
-      
+
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      
-      // Apple might not provide name/email every time, only on first login
+
       const name = credential.fullName?.givenName && credential.fullName?.familyName 
         ? `${credential.fullName.givenName} ${credential.fullName.familyName}`
         : userData.name;
-        
+
       const email = credential.email || userData.email;
-      
+
       saveUserData({
         name,
         email,
         appleLinked: true,
         appleUserId: credential.user,
       });
-      
+
       Alert.alert('Success', 'Apple account linked successfully');
     } catch (error) {
-      // Cancelled by user
-      if (error.code === 'ERR_CANCELED') {
-        return;
-      }
-      
+      if (error.code === 'ERR_CANCELED') return;
       Alert.alert('Error', 'Failed to link Apple account');
       console.error('Apple authentication error:', error);
     }
   };
-  
+
+  // Clears local user data and navigates to Home
   const handleLogout = () => {
     Alert.alert(
       'Confirm Logout',
@@ -122,18 +123,15 @@ const ProfileScreen = () => {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}> 
+      {/* Profile Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Profile</Text>
       </View>
-      
+
       {/* Profile Card */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <View style={styles.profileHeader}>
@@ -146,7 +144,7 @@ const ProfileScreen = () => {
               </Text>
             </View>
           )}
-          
+
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: colors.text }]}>
               {userData.name || 'Guest User'}
@@ -156,8 +154,8 @@ const ProfileScreen = () => {
             )}
           </View>
         </View>
-        
-        {/* Apple Sign In Button */}
+
+        {/* Apple Sign In */}
         {!userData.appleLinked && Platform.OS === 'ios' && (
           <Button 
             mode="contained"
@@ -168,19 +166,19 @@ const ProfileScreen = () => {
             Link Apple Account
           </Button>
         )}
-        
+
+        {/* Linked Confirmation */}
         {userData.appleLinked && (
           <Text style={styles.linkedText}>
             <MaterialIcons name="check-circle" size={16} color="green" /> Apple account linked
           </Text>
         )}
       </Card>
-      
-      {/* Activity Stats Card */}
+
+      {/* Activity Stats */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <Card.Content>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Overview</Text>
-          
           <View style={styles.statRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>920</Text>
@@ -197,12 +195,11 @@ const ProfileScreen = () => {
           </View>
         </Card.Content>
       </Card>
-      
-      {/* Settings Card */}
+
+      {/* Settings */}
       <Card style={[styles.card, { backgroundColor: colors.surface }]}>
         <Card.Content>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Settings</Text>
-          
           <View style={styles.settingRow}>
             <Text style={[styles.settingLabel, { color: colors.text }]}>Notifications</Text>
             <Switch
@@ -211,9 +208,7 @@ const ProfileScreen = () => {
               trackColor={{ false: '#767577', true: colors.primary }}
             />
           </View>
-          
           <Divider style={styles.divider} />
-          
           <View style={styles.settingRow}>
             <Text style={[styles.settingLabel, { color: colors.text }]}>Dark Mode</Text>
             <Switch
@@ -222,9 +217,7 @@ const ProfileScreen = () => {
               trackColor={{ false: '#767577', true: colors.primary }}
             />
           </View>
-          
           <Divider style={styles.divider} />
-          
           <View style={styles.settingRow}>
             <Text style={[styles.settingLabel, { color: colors.text }]}>Share Activity</Text>
             <Switch
@@ -233,31 +226,29 @@ const ProfileScreen = () => {
               trackColor={{ false: '#767577', true: colors.primary }}
             />
           </View>
-          
+
+          {/* Navigational Settings */}
           <Divider style={styles.divider} />
-          
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('EditProfile')}>
             <Text style={[styles.menuItemText, { color: colors.text }]}>Edit Profile</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.text} />
           </TouchableOpacity>
-          
+
           <Divider style={styles.divider} />
-          
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Privacy')}>
             <Text style={[styles.menuItemText, { color: colors.text }]}>Privacy Policy</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.text} />
           </TouchableOpacity>
-          
+
           <Divider style={styles.divider} />
-          
           <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Help')}>
             <Text style={[styles.menuItemText, { color: colors.text }]}>Help & Support</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.text} />
           </TouchableOpacity>
         </Card.Content>
       </Card>
-      
-      {/* Logout Button */}
+
+      {/* Logout */}
       <Button 
         mode="outlined" 
         onPress={handleLogout}
@@ -269,129 +260,5 @@ const ProfileScreen = () => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 50,
-    paddingHorizontal: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginLeft: 16,
-  },
-  card: {
-    elevation: 4,
-    borderRadius: 20,
-    marginBottom: 20,
-    padding: 16,
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  profileImagePlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileImageText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  profileInfo: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  profileEmail: {
-    fontSize: 14,
-    opacity: 0.8,
-  },
-  appleButton: {
-    marginTop: 16,
-    borderRadius: 8,
-  },
-  linkedText: {
-    marginTop: 16,
-    color: 'green',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ff3b30',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  settingLabel: {
-    fontSize: 16,
-  },
-  divider: {
-    height: 1,
-    marginVertical: 4,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  menuItemText: {
-    fontSize: 16,
-  },
-  logoutButton: {
-    marginVertical: 20,
-    borderRadius: 8,
-    borderColor: '#ff3b30',
-  },
-  logoutButtonContent: {
-    height: 50,
-  },
-});
 
 export default ProfileScreen;

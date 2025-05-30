@@ -21,6 +21,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 
+// List of available transport modes with their corresponding icons
 const TRANSPORT_MODES = [
   { mode: 'walking', icon: 'directions-walk' },
   { mode: 'bicycling', icon: 'pedal-bike' },
@@ -28,6 +29,7 @@ const TRANSPORT_MODES = [
   { mode: 'driving', icon: 'drive-eta' },
 ];
 
+// Theme options the user can pick from
 const THEME_OPTIONS = [
   { name: 'Attraction', value: 'attraction' },
   { name: 'Religious', value: 'religious' },
@@ -38,10 +40,9 @@ const THEME_OPTIONS = [
 const TripPreferencesScreen = ({ navigation: propNavigation }) => {
   const { colors } = useTheme();
   const hookNavigation = useNavigation();
-  
-  // Use prop navigation if available, otherwise use hook
   const navigation = propNavigation || hookNavigation;
 
+  // Form state
   const [address, setAddress] = useState('');
   const [keyword, setKeyword] = useState([]);
   const [radius, setRadius] = useState(10);
@@ -51,132 +52,101 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
 
-  const convertToMinutes = (hours, minutes) => {
-    return hours * 60 + minutes;
-  };
+  const convertToMinutes = (h, m) => h * 60 + m;
 
+  // Sends request to backend to compute new routes
   const sendPostRequest = async (parameters) => {
     try {
-      console.log('Sending parameters to backend:', parameters);
-      const response = await axios.post('http://100.64.14.73:5000/optimize_route', parameters, { 
-        timeout: 60000 
-      });
-    
+      const response = await axios.post('http://192.168.0.170:5000/optimize_route', parameters, { timeout: 60000 });
       if (response?.data?.routes) {
-        console.log('Response from backend:', response.data.routes);
         return { routes: response.data.routes };
-      } else {
-        console.error('Error: Invalid response from backend.');
-        Alert.alert('Error', 'Failed to fetch data from the server. Please try again.');
-        return { routes: [] };
       }
+      Alert.alert('Error', 'Failed to fetch data from the server. Please try again.');
+      return { routes: [] };
     } catch (error) {
-      console.error('Error in sendPostRequest:', error);
       Alert.alert('Error', 'Network error occurred. Please try again.');
       return { routes: [] };
     }
   };
 
+  // Attempts to fetch route data from a database before falling back to backend
   const fetchDataFromDatabase = async (parameters) => {
     try {
       const response = await axios.post(
-        'http://100.64.14.73:5000/get_data_from_parameters',
+        'http://localhost:5000/get_data_from_parameters',
         parameters,
         { timeout: 60000 }
       );
-
-      console.log("Raw response from database:", response);
-      console.log("Response data:", response.data);
-
       if (response.data?.routes) {
         const processedRoutes = response.data.routes.flatMap(item => item.routes);
-        console.log("Processed response from database:", processedRoutes);
         return { routes: processedRoutes };
-      } else {
-        console.log("No routes found in database response");
-        return { routes: [] };
       }
+      return { routes: [] };
     } catch (error) {
       console.error('Error fetching data from database:', error);
       return { routes: [] };
     }
   };
-  
-  const handleSavePreferences = async () => {
-    try {
-      if (!navigation?.navigate) {
-        console.error('Navigation object is not available or navigate is not a function');
-        Alert.alert('Error', 'Navigation error. Please restart the app.');
-        return;
-      }
 
-      const totalDuration = convertToMinutes(hours, minutes);
-    
-      const parameters = {
-        address,
-        keyword,
-        radius,
-        accessibility,
-        modes,
-        use_current_location: useCurrentAddress,
-        time_per_location: 0,
-        time_limit: totalDuration
-      };
-    
-      console.log('Starting data fetch process...');
-      const databaseData = await fetchDataFromDatabase(parameters);
-    
-      if (databaseData?.routes?.length > 0) {
-        console.log('Data found in database, navigating to PreferenceResult.');
-        navigation.navigate('PreferenceResult', { outp: databaseData.routes });
+  // Called when user clicks "Save Preferences"
+  const handleSavePreferences = async () => {
+    if (!navigation?.navigate) {
+      Alert.alert('Error', 'Navigation error. Please restart the app.');
+      return;
+    }
+
+    const totalDuration = convertToMinutes(hours, minutes);
+    const parameters = {
+      address,
+      keyword,
+      radius,
+      accessibility,
+      modes,
+      use_current_location: useCurrentAddress,
+      time_per_location: 0,
+      time_limit: totalDuration
+    };
+
+    // Try DB first, fallback to backend
+    const databaseData = await fetchDataFromDatabase(parameters);
+    if (databaseData?.routes?.length > 0) {
+      navigation.navigate('PreferenceResult', { outp: databaseData.routes });
+    } else {
+      const prefResult = await sendPostRequest(parameters);
+      if (prefResult?.routes?.length > 0) {
+        navigation.navigate('PreferenceResult', { outp: prefResult.routes });
       } else {
-        console.log('No relevant data found in database, fetching from backend...');
-        const prefResult = await sendPostRequest(parameters);
-        
-        if (prefResult?.routes?.length > 0) {
-          navigation.navigate('PreferenceResult', { outp: prefResult.routes });
-        } else {
-          console.log('Backend also failed or returned no data.');
-          Alert.alert('Error', 'Failed to fetch route data. Please try again.');
-        }
+        Alert.alert('Error', 'Failed to fetch route data. Please try again.');
       }
-    } catch (error) {
-      console.error('Error in handleSavePreferences:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
+  // Toggle a transport mode, max 2 allowed
   const toggleTransportMode = (mode) => {
-    setModes((prevModes) => {
-      if (prevModes.includes(mode)) {
-        return prevModes.filter((m) => m !== mode);
-      } else if (prevModes.length < 2) {
-        return [...prevModes, mode];
-      } else {
-        return prevModes;
-      }
-    });
+    setModes((prev) =>
+      prev.includes(mode)
+        ? prev.filter((m) => m !== mode)
+        : prev.length < 2
+        ? [...prev, mode]
+        : prev
+    );
   };
 
+  // Toggle a theme (multi-select)
   const toggleTheme = (theme) => {
-    setKeyword((prevKeywords) => {
-      if (prevKeywords.includes(theme)) {
-        return prevKeywords.filter((k) => k !== theme);
-      } else {
-        return [...prevKeywords, theme];
-      }
-    });
+    setKeyword((prev) =>
+      prev.includes(theme)
+        ? prev.filter((k) => k !== theme)
+        : [...prev, theme]
+    );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={[styles.header, { color: colors.text }]}>Plan Your Perfect Trip</Text>
 
+        {/* Address input */}
         <Text style={[styles.label, { color: colors.text }]}>Address</Text>
         <TextInput
           mode="outlined"
@@ -185,11 +155,12 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
           onChangeText={setAddress}
           textColor={colors.text}
           placeholderTextColor="#aaa"
-          style={[styles.searchInput, { color: colors.text }]}
+          style={styles.searchInput}
         />
 
         <Divider style={styles.divider} />
 
+        {/* Accessibility toggle */}
         <View style={styles.toggleRow}>
           <Text style={[styles.label, { color: colors.text }]}>Accessibility</Text>
           <View style={styles.switchContainer}>
@@ -209,6 +180,7 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
 
         <Divider style={styles.divider} />
 
+        {/* Search radius slider */}
         <Text style={[styles.label, { color: colors.text }]}>Search Radius</Text>
         <View style={styles.radiusRow}>
           <Text style={[styles.radiusValue, { color: colors.text }]}>{radius} miles</Text>
@@ -220,46 +192,32 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
             minimumTrackTintColor={'#00CC00'}
             maximumTrackTintColor={colors.placeholder}
             value={radius}
-            onValueChange={(val) => setRadius(val)}
+            onValueChange={setRadius}
           />
         </View>
 
         <Divider style={styles.divider} />
 
+        {/* Duration controls */}
         <Text style={[styles.label, { color: colors.text }]}>Duration</Text>
 
+        {/* Hour selection */}
         <View style={styles.stepperRow}>
           <Text style={[styles.label, { color: colors.text }]}>Hours</Text>
           <View style={styles.stepperControls}>
-            <IconButton 
-              icon="minus" 
-              onPress={() => setHours(prev => Math.max(0, prev - 1))} 
-              style={styles.stepperButton} 
-            />
+            <IconButton icon="minus" onPress={() => setHours(prev => Math.max(0, prev - 1))} />
             <Text style={[styles.stepperValue, { color: colors.text }]}>{hours}</Text>
-            <IconButton 
-              icon="plus" 
-              onPress={() => setHours(prev => prev + 1)} 
-              style={styles.stepperButton} 
-            />
+            <IconButton icon="plus" onPress={() => setHours(prev => prev + 1)} />
           </View>
         </View>
 
+        {/* Minute selection */}
         <View style={styles.stepperRow}>
           <Text style={[styles.label, { color: colors.text }]}>Minutes</Text>
           <View style={styles.stepperControls}>
-            <IconButton 
-              icon="minus" 
-              onPress={() => setMinutes(prev => Math.max(0, prev - 5))} 
-              style={styles.stepperButton} 
-            />
+            <IconButton icon="minus" onPress={() => setMinutes(prev => Math.max(0, prev - 5))} />
             <Text style={[styles.stepperValue, { color: colors.text }]}>{minutes}</Text>
-            <IconButton 
-              icon="plus" 
-              onPress={() => setMinutes(prev => (prev < 59 ? prev + 5 : 59))} 
-              style={styles.stepperButton} 
-              
-            />
+            <IconButton icon="plus" onPress={() => setMinutes(prev => (prev < 59 ? prev + 5 : 59))} />
           </View>
         </View>
 
@@ -269,28 +227,29 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
 
         <Divider style={styles.divider} />
 
+        {/* Theme selection */}
         <Text style={[styles.label, { color: colors.text }]}>Choose a Theme</Text>
         <View style={styles.themeContainer}>
-          {THEME_OPTIONS.map(({ name, value }, idx) => {
+          {THEME_OPTIONS.map(({ name, value }) => {
             const isSelected = keyword.includes(value);
             return (
               <TouchableOpacity
-                key={idx}
+                key={value}
                 onPress={() => toggleTheme(value)}
                 style={[
                   styles.themeButton,
                   {
                     backgroundColor: isSelected ? '#000000' : '#00CC00',
-                    borderWidth: isSelected ? 2 : 2,
-                    borderColor: isSelected ? '#00CC00' : '#000000' 
+                    borderColor: isSelected ? '#00CC00' : '#000000',
                   },
                 ]}
               >
-                <Text style={[styles.themeName,
-                  {
-                    color: isSelected ? '#00CC00' : '#000000' 
-                  }
-                  ]}>{name}</Text>
+                <Text style={{
+                  fontWeight: '600',
+                  color: isSelected ? '#00CC00' : '#000000'
+                }}>
+                  {name}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -298,6 +257,7 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
 
         <Divider style={styles.divider} />
 
+        {/* Transport mode picker */}
         <Text style={[styles.label, { color: colors.text }]}>Transport Mode</Text>
         <View style={styles.modes}>
           {TRANSPORT_MODES.map(({ mode, icon }) => {
@@ -309,9 +269,8 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
                 style={[
                   styles.transportButton,
                   {
-                    backgroundColor: isSelected ?  '#000000' : '#00CC00',
-                    borderWidth: isSelected ? 2 : 2,
-                    borderColor: isSelected ? '#00CC00': '#000000'
+                    backgroundColor: isSelected ? '#000000' : '#00CC00',
+                    borderColor: isSelected ? '#00CC00' : '#000000',
                   },
                 ]}
               >
@@ -320,22 +279,20 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
                   size={40}
                   color={isSelected ? '#00CC00' : '#000000'}
                 />
-                {/* <Text style={[styles.transportLabel, { color: isSelected? '#00CC00' : '#FFFFFF' }]}>
-                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                </Text> */}
               </TouchableOpacity>
             );
           })}
         </View>
 
+        {/* Save button */}
         <Button
           mode="contained"
-          onPress={handleSavePreferences} 
+          onPress={handleSavePreferences}
           style={styles.submitButton}
-          labelStyle={{ fontWeight: '600' }}
-          buttonColor={'#00CC00'}
-          textColor={'#000000'}
-        ><Text> Save Preferences </Text>
+          labelStyle={{ fontWeight: 'bold', color: '#000' }}
+          buttonColor="#00CC00"
+        >
+          Save Preferences
         </Button>
       </ScrollView>
     </SafeAreaView>
@@ -343,6 +300,7 @@ const TripPreferencesScreen = ({ navigation: propNavigation }) => {
 };
 
 export default TripPreferencesScreen;
+
 
 const styles = StyleSheet.create({
   container: { 

@@ -7,13 +7,12 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { useTheme } from '@react-navigation/native';
 
 const RouteDetailScreen = () => {
-  const { colors} =useTheme()
+  const { colors } = useTheme(); 
   const navigation = useNavigation();
   const { params } = useRoute();
-  // Expecting 'item' to contain route detail data
-  const { item } = params || {};
+  const { item } = params || {}; // route data passed from previous screen
 
-  // If for some reason 'item' is missing, show a fallback
+ 
   if (!item) {
     return (
       <View style={styles.emptyContainer}>
@@ -22,25 +21,25 @@ const RouteDetailScreen = () => {
     );
   }
 
-  // Deconstruct data from the item (adjust keys to your data shape)
+  // Destructure route details from the item
   const {
     title,
     description,
-    imageUrl,       // e.g., 'https://example.com/my-route.jpg'
-    distance,       // e.g., '12 km'
-    duration,       // e.g., '3 hrs'
-    stops,          // e.g., an array of objects with { name, description, etc. }
+    imageUrl,
+    distance,
+    duration,
+    stops, 
   } = item;
 
-  // Example function to start or join the route
   const handleStartRoute = () => {
-    // Possibly navigate to a map/tracking screen, or do something else
     alert(`Starting route: ${title}`);
+  
   };
 
   return (
     <ScrollView style={styles.container}>
-      {/* Route Image (if available) */}
+      
+      {/* Show route image if available, or a placeholder if not */}
       {imageUrl ? (
         <Card style={styles.imageCard}>
           <Image source={{ uri: imageUrl }} style={styles.image} />
@@ -54,7 +53,8 @@ const RouteDetailScreen = () => {
       )}
 
       <View style={styles.content}>
-        {/* Title & basic info */}
+        
+        {/* Main title and quick info */}
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subInfo}>
           Distance: {distance} • Duration: {duration}
@@ -62,34 +62,34 @@ const RouteDetailScreen = () => {
 
         <Divider style={styles.divider} />
 
-        {/* Description */}
+        {/* Route description */}
         <Text style={styles.sectionHeader}>Description</Text>
         <Text style={styles.description}>{description}</Text>
 
         <Divider style={styles.divider} />
 
-        {/* Stops (if your route has multiple points) */}
+        {/* Show list of stops, if provided */}
         {stops?.length > 0 && (
           <>
             <Text style={styles.sectionHeader}>Stops</Text>
             {stops.map((stop, index) => (
               <View key={`stop-${index}`} style={styles.stopContainer}>
                 <Text style={styles.stopTitle}>{stop.name}</Text>
-                {stop.description ? (
-                  <Text style={styles.stopDescription}>
-                    {stop.description}
-                  </Text>
-                ) : null}
+                {stop.description && (
+                  <Text style={styles.stopDescription}>{stop.description}</Text>
+                )}
               </View>
             ))}
           </>
         )}
 
-        {/* Button to start or join this route */}
+        {/* Button to start the route */}
         <Button
           mode="contained"
           onPress={handleStartRoute}
           style={styles.startButton}
+          labelStyle={{ fontWeight: 'bold', color: '#000' }}
+          buttonColor="#39FF14" // neon green
         >
           Start Route
         </Button>
@@ -99,7 +99,6 @@ const RouteDetailScreen = () => {
 };
 
 export default RouteDetailScreen;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

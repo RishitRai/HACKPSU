@@ -19,7 +19,7 @@ const TripSelectionScreen = () => {
   useEffect(() => {
     const fetchRoutes = async () => {
       try {
-        const response = await axios.get('http://100.64.14.73:5000/get_outputs');
+        const response = await axios.get('http://192.168.0.170:5000/get_outputs');
         const data = response.data.outputs;
 
         const getFirstValidImage = (route) => {
