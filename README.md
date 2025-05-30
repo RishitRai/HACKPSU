@@ -12,6 +12,9 @@ Built during HackPSU, Voyagr aims to make exploration effortless by combining in
 - 🗺️ **Optimized Routes** – Automatically plans the most efficient path based on time and location.
 - 🏅 **Gamified Travel** – Earn points for each place visited and climb a leaderboard.
 - 📱 **Clean, Interactive UI** – Designed for intuitive and engaging use on mobile and web.
+
+
+
 ![githubdesgin1](https://github.com/user-attachments/assets/032ae48a-ca8b-4ac2-8eb5-7e2f0d08c55c)
 
 ## 🛠️ Tech Stack
